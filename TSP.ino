@@ -29,6 +29,9 @@
 #define I2C_ADDR_WR 0x4A
 #define I2C_ADDR_RD 0x4B
 
+#define CHECK(x) if (uint8_t res = x) { Serial.printf("Error calling `%s': %d\n", #x, res); }
+
+
 // const char* SPACE = " ";
 
 const uint8_t numRX = 27;
@@ -44,8 +47,8 @@ bool TSP::init() {
      delay(1);
      digitalWrite(A6,HIGH);
      
-     Wire.begin();
-     Wire.setClock(100000);
+     CHECK(Wire.begin());
+     CHECK(Wire.setClock(100000));
      Wire.setTimeout(1000);
 
      Serial.println("\nInitialising");
@@ -57,7 +60,7 @@ bool TSP::init() {
           delay(100);
           setParameter(0x0200+i, rxMap[i], 0xff);
           // waitForAck(CMD_SETPARAM);
-          delay(100);
+          delay(1000);
           printParameter(0x0200+i);
      }
      return true;
@@ -124,7 +127,7 @@ void TSP::sendCommand(uint8_t cmd, const uint8_t *data, uint8_t len) {
      for (uint8_t i=0; i!= len; ++i,++data) {
           Wire.write(*data);
      }
-     Wire.endTransmission();
+     CHECK(Wire.endTransmission());
 }
 
 void TSP::gobble(uint8_t cmd) {
@@ -226,40 +229,39 @@ void TSP::interpretReply() {
 
      Wire.beginTransmission(I2C_ADDR);
      Wire.write(I2C_MAP_TXRDY);
-     Wire.endTransmission(false);
+     CHECK(Wire.endTransmission(false));
      Wire.requestFrom(I2C_ADDR,(uint8_t)1);
      byte n = Wire.read();
-     if (n == 0)
+     if (n == 0 || n == 255)
           return;
-     Serial.printf(" n=%d\n",n);
+     Serial.printf("interpretReply(1) n=%d\n",n);
      while (n != 0) {
-          byte r = n; 
-          if (r>INC)
-               r = INC;
-          n -= r;   
+          if (n>INC)
+               n = INC;
       
           Wire.beginTransmission(I2C_ADDR);
           Wire.write(I2C_MAP_TXBUF);
-          Wire.endTransmission(false);
-//      delayMicroseconds(100);
-          Wire.requestFrom(I2C_ADDR,r);
-          while (Wire.available()) {
+          CHECK(Wire.endTransmission(false));
+          n = Wire.requestFrom(I2C_ADDR,n);
+          Serial.printf("   -> actually got %d\n", n);
+          while (n != 0) {
                byte x = Wire.read();
-               // Serial.printf("%02X",x);
-               // Serial.print(SPACE);
                processByte(x);
-               r--;
-               if (r==0 && Wire.available()) {
-                    Serial.println("r equals 0 but there is still data in the queue");
-                    break;
-               }
+               --n;
+               // if (r==0 && Wire.available()) {
+               //      Serial.println("r equals 0 but there is still data in the queue");
+               //      break;
+               // }
           }
-          if (r != 0) {
-               Serial.print(" Nothing available, not all was read... "); Serial.print(r);
-//               delay(1);
-               n += r;  // Put back in the amount left to read.
-          }
-          Serial.println();
+
+          Wire.beginTransmission(I2C_ADDR);
+          Wire.write(I2C_MAP_TXRDY);
+          CHECK(Wire.endTransmission(false));
+          Wire.requestFrom(I2C_ADDR,(uint8_t)1);
+          byte n = Wire.read();
+          if (n == 0 || n == 255)
+               break;
+          Serial.printf("interpretReply(2) n=%d\n",n);
      }
 };
 
@@ -268,14 +270,14 @@ void TSP::waitForAck(uint8_t cmd) {
      while (! ack) {     
           Wire.beginTransmission(I2C_ADDR);
           Wire.write(I2C_MAP_TXRDY);
-          Wire.endTransmission(false);
+          CHECK(Wire.endTransmission(false));
           Wire.requestFrom(I2C_ADDR,(uint8_t)1);
           byte n = Wire.read();
           if (n == 0 || n == 255) {
                delay(1);
                continue;
           }
-          Serial.printf(" n=%d\n",n);
+          Serial.printf("waitForAck(1) n=%d\n",n);
 
           while (true) {
                if (n>INC)
@@ -283,29 +285,32 @@ void TSP::waitForAck(uint8_t cmd) {
 
                Wire.beginTransmission(I2C_ADDR); 
                Wire.write(I2C_MAP_TXBUF);
-               Wire.endTransmission(false);
+               CHECK(Wire.endTransmission(false));
                Wire.requestFrom(I2C_ADDR,n);
                while (Wire.available()) {
                     byte x = Wire.read();
                     processByte(x);
                     ack |= (lastAck == cmd);
+                    
 
-                    if (r==0 && Wire.available()) {
-                         Serial.println("r equals 0 but there is still data in the queue");
-                         break;
-                    }
+                    // if (r==0 && Wire.available()) {
+                    //      Serial.println("r equals 0 but there is still data in the queue");
+                    //      break;
+                    // }
                }
+               if (ack)
+                    break;
 
                // Read the current value of TXRDY into n
                Wire.beginTransmission(I2C_ADDR);
                Wire.write(I2C_MAP_TXRDY);
-               Wire.endTransmission(false);
+               CHECK(Wire.endTransmission(false));
                Wire.requestFrom(I2C_ADDR,(uint8_t)1);
                byte n = Wire.read();
                if (n == 0 || n == 255) {
                     break;
                }
-               Serial.printf(" n=%d\n",n);
+               Serial.printf("waitForAck(2) n=%d\n",n);
           }
      }
 };
@@ -314,7 +319,7 @@ void TSP::waitForAck(uint8_t cmd) {
 void TSP::printVersion() {
      Serial.println("Firmware Version");
      sendCommand(CMD_VER,NULL,0);
-     delay(1);
+     delayMicroseconds(100);
      interpretReply();
 }
 
@@ -322,7 +327,7 @@ void TSP::printParameter(uint16_t addr) {
      uint8_t *c = (uint8_t *)&addr;
      Serial.printf("Getting parameter %04X\n", *(uint16_t *)c);
      sendCommand(CMD_GETPARAM, c, 2);
-     delay(1);
+     delayMicroseconds(100);
      interpretReply();
 }
 
@@ -334,5 +339,6 @@ void TSP::setParameter(uint16_t addr, uint32_t data, uint32_t mask) {
      *(uint32_t *)(buffer+2) = data;
      *(uint32_t *)(buffer+6) = mask;
      sendCommand(CMD_SETPARAM, buffer, 10);
+     delayMicroseconds(100);
      interpretReply();    
 }

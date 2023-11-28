@@ -79,15 +79,19 @@ byte adc [256];
 
 TSP tsp;
 
+
 void setup() {
   Serial.begin(921600, SERIAL_8N1);
   while (!Serial) 
-    delay(1); // wait for serial port to connect. Needed for native USB
+    delay(10); // wait for serial port to connect. Needed for native USB
   
+  Serial.printf("\nStarting connection with TSP\n");
   tsp.init();
+  
   tsp.printVersion();
-  tsp.printParameter(0x0100);
-  tsp.printParameter(0x0101);
+
+  // tsp.printParameter(0x0100);
+  // tsp.printParameter(0x0101);
   tsp.printParameter(0x0080);
   tsp.printParameter(0x0082);
 //  tsp.setParameter((uint16_t)0x0080, 0x00000000, 0x00000ffff);
@@ -97,7 +101,13 @@ void setup() {
 //  tsp.setParameter((uint16_t)0x0081, 0x0000ffff, 0x0000ffff);
 //  tsp.printParameter((uint16_t)0x0081);
 
-//  tsp.interpretReply();  
+//  tsp.interpretReply();
+
+  for (byte i=0; i!=27; ++i)
+       tsp.printParameter((uint16_t)0x0200+i);
+  for (byte i=0; i!=19; ++i)
+       tsp.printParameter((uint16_t)0x0280+i);
+  
 }
 
 

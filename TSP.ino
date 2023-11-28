@@ -47,8 +47,8 @@ bool TSP::init() {
      delay(1);
      digitalWrite(A6,HIGH);
      
-     CHECK(Wire.begin());
-     CHECK(Wire.setClock(100000));
+     Wire.begin();
+     Wire.setClock(100000);
      Wire.setTimeout(1000);
 
      Serial.println("\nInitialising");
@@ -258,7 +258,7 @@ void TSP::interpretReply() {
           Wire.write(I2C_MAP_TXRDY);
           CHECK(Wire.endTransmission(false));
           Wire.requestFrom(I2C_ADDR,(uint8_t)1);
-          byte n = Wire.read();
+          n = Wire.read();
           if (n == 0 || n == 255)
                break;
           Serial.printf("interpretReply(2) n=%d\n",n);
@@ -306,7 +306,7 @@ void TSP::waitForAck(uint8_t cmd) {
                Wire.write(I2C_MAP_TXRDY);
                CHECK(Wire.endTransmission(false));
                Wire.requestFrom(I2C_ADDR,(uint8_t)1);
-               byte n = Wire.read();
+               n = Wire.read();
                if (n == 0 || n == 255) {
                     break;
                }

@@ -11,9 +11,11 @@
 class TSP {
      uint8_t lastAck;
 public:
-     TSP() {};
+     TSP()
+          : gobbleTillCmdAck(0), locationInMsg(0), msgLen(0), currentCmd(0), gobbled(0)
+          { };
      bool init();
-     void getRegisters(byte reg, byte size, byte *buffer);
+     byte getRegisters(byte reg, byte size, byte *buffer);
 
      uint8_t touchBuffer[0x40];
      uint8_t printTouches();
@@ -21,7 +23,9 @@ public:
      void sendCommand(uint8_t cmd, const uint8_t *data, uint8_t len);
      uint8_t locationInMsg, msgLen, currentCmd, gobbleTillCmdAck, gobbled;
      uint8_t buffer[256];
-     
+
+     void delayAndInterpret(uint16_t usec);
+     void interpretParam(uint8_t *buffer);
      void gobble(uint8_t cmd);
      void processByte (uint8_t b);
      void interpretReply();

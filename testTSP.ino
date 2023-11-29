@@ -1,7 +1,6 @@
 #include <Wire.h>
 #include "TSP.h"
 
-//#define IRQ 12
 
 byte adc [256];
 
@@ -80,6 +79,11 @@ byte adc [256];
 TSP tsp;
 
 
+int isrcnt=0;
+void isr() {
+     isrcnt++;
+}
+
 void setup() {
   Serial.begin(921600, SERIAL_8N1);
   while (!Serial) 
@@ -87,6 +91,9 @@ void setup() {
   
   Serial.printf("\nStarting connection with TSP\n");
   tsp.init();
+
+  pinMode(A7, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(A7), isr, FALLING);
   
   tsp.printVersion();
 
@@ -121,4 +128,5 @@ void loop() {
   tsp.readInfo();
 //  tsp.interpretReply();
 //  tsp.getRegisters(0x00, 0x0d, adc)
+  Serial.printf("INTERRUPT COUNT %d\n", isrcnt);
 }

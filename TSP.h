@@ -9,21 +9,24 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define IRQ_PIN A12
+#define TSP_RESET_PIN A6
 
 class TSP {
      uint8_t lastAck;
 
-     // Circular buffer, originally to read data in ISR and process in main thread. Now splits reading from interpretation
+     // Circular buffer, originally to read data in ISR and process in main thread.
+     // Now splits reading from interpretation
      static const uint16_t buflen = 1024;
-     uint8_t buffer[buflen];
+     uint8_t circBuffer[buflen], msgBuffer[512];
      uint16_t wrIdx,             // Index at which to write
           rdIdx;                 // Index at which to read
-     void incIdx(uint16_t &i) { i = (i+1) % buflen; }
+     void incIdx(uint16_t &i) { Serial.printf(" INCIDX(%d) ",i); i = (i+1) % buflen; }
      bool streamAvailable;      // Flag set in ISR
-
+     
 public:
      TSP()
-          : gobbleTillCmdAck(0), locationInMsg(0), msgLen(0), currentCmd(0), gobbled(0), wrIdx(0), rdIdx(0),streamAvailable(true)
+          : gobbleTillCmdAck(0), locationInMsg(0), msgLen(0), currentCmd(0),
+            gobbled(0), wrIdx(0), rdIdx(0),streamAvailable(true)
           { };
      
      bool init();
@@ -47,7 +50,6 @@ public:
      void printVersion();
      void printParameter(uint16_t addr);
      void setParameter(uint16_t addr, uint32_t data, uint32_t mask);
-     // void waitForAck(uint8_t cmd);
 };
 
 #endif  /* TSP_H */

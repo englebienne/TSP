@@ -82,7 +82,7 @@
 
 #define CHECK(x) if (uint8_t res = x) { Serial.printf("%s - ERROR calling `%s': %d\n", __FUNCTION__, #x, res); }
 #define CHECK_RETURN(x) if (uint8_t res = x) { Serial.printf("%s - ERROR calling `%s': %d\n", __FUNCTION__, #x, res); delayMicroseconds(1); gobble(0x01); return; }
-#define INDENT(...) Serial.printf("\n                              " __VA_ARGS__)
+#define INDENT(...) Serial.printf("" __VA_ARGS__)
 
 
 // const char* SPACE = " ";
@@ -105,7 +105,8 @@ void TSP::handleInterrupt() {
      streamAvailable = true;
 }
 
-#define MAXREAD 128
+// #define MAXREAD 150
+#define MAXREAD 140
 void TSP::getData() {     
      // if (digitalRead(IRQ_PIN) != LOW) { // Instead of checking `streamAvailable`, directly check pin.          
      //      // Seems to be mostly low, even when no data in buffer. But no data seems to be in buffer when high
@@ -115,19 +116,20 @@ void TSP::getData() {
      // }
      // Serial.print("SA");
 
-     for (uint8_t i=0; i<4; ++i) {             // Repeatedly read from the buffer to be sure we get everything we need
+     for (uint8_t i=0; i<10; ++i) {             // Repeatedly read from the buffer to be sure we get everything we need
           Wire.beginTransmission(I2C_ADDR);
           Wire.write(I2C_MAP_TXRDY);
           if (byte res = Wire.endTransmission(false)) {
                Serial.printf("%s: Wire.endTransmission(false) returned %d\n", __PRETTY_FUNCTION__, res);
-               delayMicroseconds(100);
+               // delayMicroseconds(100);
                return;
           }
           Wire.requestFrom(I2C_ADDR,(uint8_t)1);
           byte n = Wire.read();
           if (byte res = Wire.endTransmission()) {
                Serial.printf("%s: Wire.endTransmission() returned %d\n", __PRETTY_FUNCTION__, res);
-               delayMicroseconds(100);
+               reset();
+               // delayMicroseconds(100);
           }
           
           if (n == 0 || n==255)  {
@@ -159,14 +161,14 @@ void TSP::getData() {
           Wire.write(I2C_MAP_TXBUF);
           if (byte res = Wire.endTransmission(false)) {
                Serial.printf("%s: Wire.endTransmission(false) - 2 - returned %d\n", __PRETTY_FUNCTION__, res);
-               delayMicroseconds(10);
+               // delayMicroseconds(10);
                return;
           }
           n = Wire.requestFrom(I2C_ADDR,(uint8_t)n);
           if (byte res = Wire.endTransmission()) {
                // Wire.clearTimeoutFlag();
                Serial.printf("%s: Wire.endTransmission() - 2 - returned %d after getting %d bytes\n", __PRETTY_FUNCTION__, res, n);
-               delayMicroseconds(10);
+               // delayMicroseconds(10);
           }
           Serial.printf("got %d\n",n);
 
@@ -179,7 +181,8 @@ void TSP::getData() {
                // incIdx(wrIdx);
                processByte(Wire.read());
           }
-          // delayMicroseconds(10); // Not sure this is needed, but being too fast makes things less stable... Being too slow too?
+          // for (int x=0; i!=10; ++x);
+          // delayMicroseconds(1); // Not sure this is needed, but being too fast makes things less stable... Being too slow too?
      }
 }     
 
@@ -193,7 +196,8 @@ void TSP::getData() {
 void TSP::delayAndPoll(uint16_t msec) {
      for (uint16_t i=0; i!=msec; ++i) {
           interpretReply();
-          delayMicroseconds(10);
+          for (int i=0; i!=50; ++i);
+          // delayMicroseconds(1);
      }
 }
 
@@ -204,57 +208,60 @@ void TSP::delayAndPoll(uint16_t msec) {
  * 2023/11/30: GWENN - First version
  * 
  **/
-bool TSP::init() {
+void TSP::init() {
      pinMode(TSP_RESET_PIN, OUTPUT);       // Connected to reset
      // Allows us to reset communication when we start up (again)
 
      // Setup I2C connection
      Wire.begin();
      Wire.setClock(400000);
-     Wire.setTimeout(10000);
+     Wire.setTimeout(1000);
 
-     
-     Serial.println("\nInitialising");
+     reset();
+}
+
+void TSP::reset() {
+     cnt = 0;
+     Serial.println("resetting");
      digitalWrite(TSP_RESET_PIN,LOW);      // Reset the MTCH6303
-     delay(1000);
+     delay(100);
      digitalWrite(TSP_RESET_PIN,HIGH);
-     delay(1000);                // Delay of 1 resulted in NACKs -> Reset works :-)
+     delay(100);                // Delay of 1 resulted in NACKs -> Reset works :-)
 
-     printParameter(PAR_NVAM);  // Get the list of currently active modules 
-     
+     printParameter(PAR_NVAM);  // Get the list of currently active modules     
      setParameter(PAR_NVAM, 0x0, NVAM_FULLMASK); // Disable all modules while parameters are set
 
-     delayAndPoll(10);
+     delayAndPoll(1);
      printParameter(PAR_NVAM);  // debug: Verify everything's off (it is)
 
      for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - OUT pin map
-          delayAndPoll(1);
+          // delayAndPoll(1);
           setParameter(0x0200+i, rxMap[i], 0xff);
      }
-     for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
-          delayAndPoll(1);
-          printParameter(0x0200+i);
-     }
+     // for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
+     //      delayAndPoll(1);
+     //      printParameter(0x0200+i);
+     // }
 
      // setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
      //              NVAM_DECODE | NVAM_DIGITIZER | NVAM_AUTOBASE | NVAM_BESTFREQ | NVAM_FULLSCAN,
      //              NVAM_FULLMASK);
      setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
-                  NVAM_DIGITIZER|NVAM_AUTOBASE|NVAM_BESTFREQ,
+                  NVAM_FULLSCAN,
                   NVAM_FULLMASK);
-     delayAndPoll(10);
+     delayAndPoll(1);
      printParameter(PAR_NVAM);  // Verify the modules are activated
-     delayAndPoll(10);
+     delayAndPoll(1);
      sendCommand(CMD_FORCEBASELINE,NULL,0); // Get a baseline noise measurement
-     delayAndPoll(20);
+     delayAndPoll(2);
 
-#define DBG NVDM_SELFNORM
+#define DBG NVDM_MUTCACHE
+// #define DBG NVDM_SELFNORM
      setParameter(PAR_NVDM,     // Activate debug modules. I want to figure out how to read raw capacitance measurements
                   DBG,
                   DBG);
      
      printParameter(PAR_NVDM);  // debug: Check what's active
-     return true;
 }
 
 /**
@@ -467,10 +474,10 @@ void printBuffer(uint8_t *buf, uint8_t len) {
  * 
  **/
 void TSP::processByte (uint8_t b) {
-     Serial.printf(" [%02X]-%d",b,locationInMsg); // Debug     
+     // Serial.printf(" [%02X]-%d",b,locationInMsg); // Debug     
      
      if (gobbleTillCmdAck) {    // Ignore bytes to resynch the stream, until we reach [0x02 0xF0 <cmd>]
-          Serial.print("-G"); //"
+          // Serial.print("-G"); //"
           if (gobbled == 0 && b == 0x02) {
                gobbled = 1;                         // Serial.println("Gobbled 0x02");
                return;
@@ -589,11 +596,20 @@ void TSP::processByte (uint8_t b) {
           printBuffer(msgBuffer+1,msgLen-2);
           break;
      case REP_MUT_NORM_SEC:
-          INDENT("Mutual Normalised Section rx=%d, tx=%d, nodes=[");
+          INDENT("MutNorm rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
+          for (byte i=2; i < msgLen; i+=2) 
+               Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
+          Serial.println("]");
+          Serial.printf("MNS %d ", cnt++);
+          break;
+     case 0xC2:
+          INDENT("Raw Mut? rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
           for (byte i=2; i < msgLen; i+=2) 
                Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
           Serial.println("]");
           break;
+
+          
      case REP_PARAM_READ:
           interpretParam(msgBuffer);
           break;
@@ -603,7 +619,7 @@ void TSP::processByte (uint8_t b) {
                gobble(0x01);
                break;
           }
-          INDENT("Got acknowledgement for cmd %02X\n", msgBuffer[0]);
+          // INDENT("Got acknowledgement for cmd %02X\n", msgBuffer[0]);
           lastAck = msgBuffer[0];
           // Serial.printf("rd=%d,wr=%d\n", rdIdx,wrIdx);
           break;
@@ -712,7 +728,7 @@ void TSP::printParameter(uint16_t addr) {
      uint8_t *c = (uint8_t *)&addr;
      Serial.printf("Getting parameter %04X\n", *(uint16_t *)c);
      sendCommand(CMD_GETPARAM, c, 2);
-     delayAndPoll(10);
+     delayAndPoll(1);
      // interpretReply();
 }
 
@@ -733,6 +749,6 @@ void TSP::setParameter(uint16_t addr, uint32_t data, uint32_t mask) {
      *(uint32_t *)(buffer+2) = data;
      *(uint32_t *)(buffer+6) = mask;
      sendCommand(CMD_SETPARAM, buffer, 10);
-     delayAndPoll(10);
+     delayAndPoll(1);
      // interpretReply();    
 }

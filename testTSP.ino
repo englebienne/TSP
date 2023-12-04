@@ -35,7 +35,7 @@ void setup() {
 
 
 void loop() {
-     delay(1);                      // wait for a second
+     delayMicroseconds(1);                      // wait for a second
      tsp.readInfo();
 }
 

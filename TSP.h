@@ -20,16 +20,18 @@ class TSP {
      uint8_t circBuffer[buflen], msgBuffer[512];
      uint16_t wrIdx,             // Index at which to write
           rdIdx;                 // Index at which to read
+     uint16_t cnt;
      void incIdx(uint16_t &i) { Serial.printf(" INCIDX(%d) ",i); i = (i+1) % buflen; }
      bool streamAvailable;      // Flag set in ISR
      
 public:
      TSP()
           : gobbleTillCmdAck(0), locationInMsg(0), msgLen(0), currentCmd(0),
-            gobbled(0), wrIdx(0), rdIdx(0),streamAvailable(true)
+            gobbled(0), wrIdx(0), rdIdx(0),streamAvailable(true), cnt(0)
           { };
      
-     bool init();
+     void init();
+     void reset();
 
      void handleInterrupt();
      void getData();

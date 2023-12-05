@@ -5,6 +5,12 @@
 // Defines
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// #define NVDM_MASK NVDM_MUTRAW
+#define NVDM_MASK NVDM_MUTCACHE
+// #define NVDM_MASK NVDM_SELFNORM
+
+#define NVAM_MASK NVAM_DIGITIZER | NVAM_BESTFREQ | NVAM_FULLSCAN
+
 #define I2C_ADDR           (uint8_t)0x25
 
 #define REP_ECHO            0x04
@@ -97,15 +103,6 @@ const uint8_t rxMap[numRX] = { 21, 22, 23, 24, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 // const uint8_t rxMap[numRX] = { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 0, 1, 2, 3, 15, 16 };
 
 
-void TSP::handleInterrupt() {
-     // Ideally, this should initiate the I2C interaction to read from the device, but
-     // the Wire library does not support that. So, we set a flag that we poll to check if something's available
-     //
-     // However. this does not seem to work (falls, doesn't raise? Not sure)
-     streamAvailable = true;
-}
-
-// #define MAXREAD 150
 #define MAXREAD 140
 void TSP::getData() {     
      // if (digitalRead(IRQ_PIN) != LOW) { // Instead of checking `streamAvailable`, directly check pin.          
@@ -134,7 +131,6 @@ void TSP::getData() {
           
           if (n == 0 || n==255)  {
                // Serial.print("x");
-               streamAvailable = false;     
                return;
           }
 
@@ -170,7 +166,7 @@ void TSP::getData() {
                Serial.printf("%s: Wire.endTransmission() - 2 - returned %d after getting %d bytes\n", __PRETTY_FUNCTION__, res, n);
                // delayMicroseconds(10);
           }
-          Serial.printf("got %d\n",n);
+          // Serial.printf("got %d\n",n);
 
           while (Wire.available()) {
                --n;
@@ -222,6 +218,7 @@ void TSP::init() {
 
 void TSP::reset() {
      cnt = 0;
+     calibrating = 10;
      Serial.println("resetting");
      digitalWrite(TSP_RESET_PIN,LOW);      // Reset the MTCH6303
      delay(100);
@@ -247,7 +244,7 @@ void TSP::reset() {
      //              NVAM_DECODE | NVAM_DIGITIZER | NVAM_AUTOBASE | NVAM_BESTFREQ | NVAM_FULLSCAN,
      //              NVAM_FULLMASK);
      setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
-                  NVAM_FULLSCAN,
+                  NVAM_MASK,
                   NVAM_FULLMASK);
      delayAndPoll(1);
      printParameter(PAR_NVAM);  // Verify the modules are activated
@@ -255,11 +252,9 @@ void TSP::reset() {
      sendCommand(CMD_FORCEBASELINE,NULL,0); // Get a baseline noise measurement
      delayAndPoll(2);
 
-#define DBG NVDM_MUTCACHE
-// #define DBG NVDM_SELFNORM
      setParameter(PAR_NVDM,     // Activate debug modules. I want to figure out how to read raw capacitance measurements
-                  DBG,
-                  DBG);
+                  NVDM_MASK,
+                  NVDM_MASK);
      
      printParameter(PAR_NVDM);  // debug: Check what's active
 }
@@ -596,17 +591,54 @@ void TSP::processByte (uint8_t b) {
           printBuffer(msgBuffer+1,msgLen-2);
           break;
      case REP_MUT_NORM_SEC:
-          INDENT("MutNorm rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
-          for (byte i=2; i < msgLen; i+=2) 
-               Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
-          Serial.println("]");
-          Serial.printf("MNS %d ", cnt++);
+          // INDENT("MutNorm rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
+          // for (byte i=2; i < msgLen; i+=2) 
+          //      Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
+          // Serial.println("]");
+          // Serial.printf("MNS %d ", cnt++);
+
+          if (msgBuffer[0] == 0) {
+               Serial.println();
+               for (byte r = 0; r<NUM_RX; ++r) {
+                    for (byte t=0; t<NUM_TX; ++t)
+                         Serial.printf(" %3d", mut[r][t]-cal[r][t]);
+                    Serial.println();
+               }
+               if (calibrating != 0)
+                    calibrating--;
+          }
+          for (byte c=0, i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++c)
+               if (t+c < NUM_TX) {
+                    mut[r][t+c] = *(uint16_t *)(msgBuffer+i);
+                    if (calibrating) 
+                         cal[r][t+c] = *(uint16_t *)(msgBuffer+i);
+               }          
+                         
           break;
      case 0xC2:
-          INDENT("Raw Mut? rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
-          for (byte i=2; i < msgLen; i+=2) 
-               Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
-          Serial.println("]");
+          // INDENT("Raw Mut? rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
+          // for (byte i=2; i < msgLen; i+=2) 
+          //      Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
+          // Serial.println("]");
+
+          if (msgBuffer[0] == 0) {
+               Serial.println();
+               for (byte r = 0; r<NUM_RX; ++r) {
+                    for (byte t=0; t<NUM_TX; ++t)
+                         Serial.printf(" %3d", mut[r][t] - cal[r][t]);
+                    Serial.println();
+               }
+               if (calibrating != 0)
+                    calibrating--;
+          }
+          for (byte c=0, i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++c)
+               if (r < NUM_RX && t+c < NUM_TX) {
+                    mut[r][t+c] = *(uint16_t *)(msgBuffer+i);
+                    if (calibrating) 
+                         cal[r][t+c] = *(uint16_t *)(msgBuffer+i);
+               }
+
+
           break;
 
           

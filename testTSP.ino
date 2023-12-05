@@ -12,9 +12,6 @@
 
 TSP tsp;
 
-void isr() {
-     tsp.handleInterrupt();
-}
 
 void setup() {
      Serial.begin(921600, SERIAL_8N1);
@@ -23,13 +20,6 @@ void setup() {
   
      Serial.printf("\nStarting connection with TSP\n");
      tsp.init();
-
-     // pinMode(IRQ_PIN,OUTPUT);
-     // digitalWrite(IRQ_PIN,HIGH);
-     // pinMode(IRQ_PIN, INPUT_PULLUP);
-     // attachInterrupt(digitalPinToInterrupt(IRQ_PIN), isr, FALLING);
-  
-     // tsp.printVersion();
 }
 
 

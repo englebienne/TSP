@@ -19,10 +19,11 @@ class TSP {
      // Circular buffer, originally to read data in ISR and process in main thread.
      // Now splits reading from interpretation
      static const uint16_t buflen = 1024;
-     uint8_t msgBuffer[512];
+     uint8_t  msgBuffer[512];
      uint16_t cnt;
-     uint16_t mut[NUM_RX][NUM_TX], cal[NUM_RX][NUM_TX];
-     uint8_t calibrating;
+     uint16_t cal[NUM_RX][NUM_TX];
+     uint8_t  mut[NUM_RX][NUM_TX];
+     uint8_t  calibrating;
      
 public:
      TSP()
@@ -51,6 +52,9 @@ public:
      void printVersion();
      void printParameter(uint16_t addr);
      void setParameter(uint16_t addr, uint32_t data, uint32_t mask);
+
+     void baseline();
+     void transmit();
 };
 
 #endif  /* TSP_H */

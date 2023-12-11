@@ -5,11 +5,22 @@
 // Defines
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// #define NVDM_MASK NVDM_MUTRAW
-#define NVDM_MASK NVDM_MUTCACHE
+// #define DEBUG
+#ifdef DEBUG
+#define DEBUG_PRINT(...) Serial.printf("DB " __VA_ARGS__)
+#else
+#define DEBUG_PRINT(...)
+#endif
+
+
+
+#define NVDM_MASK NVDM_MUTRAW
+// #define NVDM_MASK NVDM_MUTCACHE
 // #define NVDM_MASK NVDM_SELFNORM
 
-#define NVAM_MASK NVAM_DIGITIZER | NVAM_BESTFREQ | NVAM_FULLSCAN
+// #define NVAM_MASK NVAM_DIGITIZER | NVAM_BESTFREQ | NVAM_FULLSCAN
+// #define NVAM_MASK NVAM_BESTFREQ|NVAM_FULLSCAN
+#define NVAM_MASK NVAM_FULLSCAN
 
 #define I2C_ADDR           (uint8_t)0x25
 
@@ -97,7 +108,7 @@ const uint8_t numRX = 27;
 
 // Not sure which of the following is right:
 // Indices are RX lines for each pin (seems most logical, and it turns out that the default values for the TX pins are, in this format, correspoding to the layout of the board):
-const uint8_t rxMap[numRX] = { 21, 22, 23, 24, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 25, 26, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 };
+const uint8_t rxMap[numRX] = { 21, 22, 23, 24, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 25, 26, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 }; // < this is completely wrong.
 // or
 // indices are pin numbers of each RX line:
 // const uint8_t rxMap[numRX] = { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 0, 1, 2, 3, 15, 16 };
@@ -125,7 +136,8 @@ void TSP::getData() {
           byte n = Wire.read();
           if (byte res = Wire.endTransmission()) {
                Serial.printf("%s: Wire.endTransmission() returned %d\n", __PRETTY_FUNCTION__, res);
-               reset();
+               if (res == 5)
+                    reset();
                // delayMicroseconds(100);
           }
           
@@ -192,7 +204,7 @@ void TSP::getData() {
 void TSP::delayAndPoll(uint16_t msec) {
      for (uint16_t i=0; i!=msec; ++i) {
           interpretReply();
-          for (int i=0; i!=50; ++i);
+          for (int i=0; i!=2; ++i);
           // delayMicroseconds(1);
      }
 }
@@ -210,7 +222,7 @@ void TSP::init() {
 
      // Setup I2C connection
      Wire.begin();
-     Wire.setClock(400000);
+     Wire.setClock(480000);
      Wire.setTimeout(1000);
 
      reset();
@@ -218,8 +230,8 @@ void TSP::init() {
 
 void TSP::reset() {
      cnt = 0;
-     calibrating = 10;
-     Serial.println("resetting");
+     calibrating = 2;
+     Serial.print("resetting\n");
      digitalWrite(TSP_RESET_PIN,LOW);      // Reset the MTCH6303
      delay(100);
      digitalWrite(TSP_RESET_PIN,HIGH);
@@ -231,14 +243,23 @@ void TSP::reset() {
      delayAndPoll(1);
      printParameter(PAR_NVAM);  // debug: Verify everything's off (it is)
 
-     for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - OUT pin map
-          // delayAndPoll(1);
-          setParameter(0x0200+i, rxMap[i], 0xff);
-     }
-     // for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
+     // for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - OUT pin map
      //      delayAndPoll(1);
+     //      setParameter(0x0200+i, rxMap[i], 0xff);
+     // }
+     // for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
+     //      delayAndPoll(10);
      //      printParameter(0x0200+i);
      // }
+     // for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - OUT pin map
+     //      delayAndPoll(10);
+     //      setParameter(0x0240+i, rxMap[i], 0xff);
+     // }
+     // for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
+     //      delayAndPoll(10q);
+     //      printParameter(0x0200+i);
+     // }
+     // delayMicroseconds(2000);
 
      // setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
      //              NVAM_DECODE | NVAM_DIGITIZER | NVAM_AUTOBASE | NVAM_BESTFREQ | NVAM_FULLSCAN,
@@ -312,7 +333,7 @@ uint8_t TSP::printTouches() {
      if (touchStatus & 0x20) Serial.print("GST ");
      if (touchStatus & 0x40) Serial.print("MGC ");
      if (touchStatus & 0x80) Serial.print("R ");
-     Serial.println();
+     Serial.print("\n");
      
      for (uint8_t i = 0; i<num; ++i) {
           uint8_t
@@ -384,7 +405,7 @@ void TSP::sendCommand(uint8_t cmd, const uint8_t *data, uint8_t len) {
 void TSP::gobble(uint8_t cmd) {
      gobbleTillCmdAck = cmd;
      gobbled = 0;
-     Serial.printf("Gobbling until %02X\n",cmd);
+     DEBUG_PRINT("Gobbling until %02X\n",cmd);
      msgLen = 0;
      byte v = 0xDE;
      sendCommand(CMD_ECHO,&v,1); // Ensure an ack is comming.
@@ -407,7 +428,7 @@ void TSP::interpretParam(uint8_t *buffer) {
      Serial.print("](");
      for (byte i=2; i<msgLen-1; ++i) // msglen contains command, buffer starts at addr.
           Serial.printf("%d,", buffer[i]);
-     Serial.println(")");
+     Serial.print(")\n");
 
      uint16_t addr = *(uint16_t *)buffer;
      uint16_t payload8 = *(uint8_t *)(buffer+2);
@@ -427,7 +448,7 @@ void TSP::interpretParam(uint8_t *buffer) {
           if (payload16 & NVAM_AUTOBASE)  Serial.print("AUTOBASE ");
           if (payload16 & NVAM_DIGITIZER) Serial.print("DIGITIZER ");
           if (payload16 & NVAM_DECODE)    Serial.print("DECODE ");
-          Serial.println("]");
+          Serial.print("]\n");
           break;
           
      case PAR_NVDM:
@@ -448,7 +469,7 @@ void TSP::interpretParam(uint8_t *buffer) {
           BITP(CUSTOM);
           BITP(DIAG);
           BITP(GESTIC);
-          Serial.println("]");
+          Serial.print("]\n");
           break;
      }
 }
@@ -555,7 +576,7 @@ void TSP::processByte (uint8_t b) {
      // End of message reached
      switch (currentCmd) {
      case REP_ECHO:
-          INDENT("Echo? What you playin' at? ");
+          INDENT("ECHO");
           printBuffer(msgBuffer, msgLen-1);
           break;
      case REP_FLASHCONTENTS:
@@ -566,7 +587,7 @@ void TSP::processByte (uint8_t b) {
           INDENT("Adc Dbg: rx=%d, tx=%d, freq=%d", msgBuffer[0], msgBuffer[1], msgBuffer[2]);
           for (uint8_t i=4; i<msgLen; i+=2) {
                if (i%16==0) {
-                    Serial.println();
+                    Serial.print("\n");
                     INDENT("    ");
                }
                Serial.printf(" %04X", *(uint16_t *)(msgBuffer+i));
@@ -598,21 +619,24 @@ void TSP::processByte (uint8_t b) {
           // Serial.printf("MNS %d ", cnt++);
 
           if (msgBuffer[0] == 0) {
-               Serial.println();
-               for (byte r = 0; r<NUM_RX; ++r) {
-                    for (byte t=0; t<NUM_TX; ++t)
-                         Serial.printf(" %3d", mut[r][t]-cal[r][t]);
-                    Serial.println();
-               }
+               // Serial.print("\n");
+               // for (byte r = 0; r<NUM_RX; ++r) {
+               //      for (byte t=0; t<NUM_TX; ++t)
+               //           Serial.printf(" %3d", mut[r][t]); //-cal[r][t]);
+               //      Serial.print("\n");
+               // }
+               transmit();
                if (calibrating != 0)
                     calibrating--;
           }
-          for (byte c=0, i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++c)
-               if (t+c < NUM_TX) {
-                    mut[r][t+c] = *(uint16_t *)(msgBuffer+i);
+          for (byte i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++t) {
+               uint16_t v = *(uint16_t *)(msgBuffer+i);
+               if (t < NUM_TX) {
+                    mut[r][t] = v;
                     if (calibrating) 
-                         cal[r][t+c] = *(uint16_t *)(msgBuffer+i);
-               }          
+                         cal[r][t] = v;
+               }
+          }
                          
           break;
      case 0xC2:
@@ -622,22 +646,31 @@ void TSP::processByte (uint8_t b) {
           // Serial.println("]");
 
           if (msgBuffer[0] == 0) {
-               Serial.println();
-               for (byte r = 0; r<NUM_RX; ++r) {
-                    for (byte t=0; t<NUM_TX; ++t)
-                         Serial.printf(" %3d", mut[r][t] - cal[r][t]);
-                    Serial.println();
-               }
+               transmit();
                if (calibrating != 0)
                     calibrating--;
           }
-          for (byte c=0, i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++c)
-               if (r < NUM_RX && t+c < NUM_TX) {
-                    mut[r][t+c] = *(uint16_t *)(msgBuffer+i);
+          for (byte i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++t) {
+               uint16_t v = *(uint16_t *)(msgBuffer+i);
+               if (r < NUM_RX && t < NUM_TX) {
+                    if (cal[r][t]<v) {
+                         // cal[r][t] = v; // Update calibration?
+                         mut[r][t]=0;
+                    } else
+                         mut[r][t] = cal[r][t]-v;
                     if (calibrating) 
-                         cal[r][t+c] = *(uint16_t *)(msgBuffer+i);
+                         cal[r][t] = v;
                }
-
+          }
+          // for (byte c=0, i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++c)
+          //      if (r < NUM_RX && t+c < NUM_TX) {
+          //           mut[r][t+c] = *(uint16_t *)(msgBuffer+i)-cal[r][t+c];
+          //           // if (mut[r][t+c] > 10000)
+          //           //      mut[r][t+c] = 0;
+          //           if (calibrating) 
+          //                cal[r][t+c] = *(uint16_t *)(msgBuffer+i);
+          //      }
+               
 
           break;
 
@@ -659,7 +692,7 @@ void TSP::processByte (uint8_t b) {
           INDENT("Touch filtered "); 
           for (byte i=0; i+1<msgLen; i+=5) 
                Serial.printf("[ ID=%02X (%d,%d) ] ", msgBuffer[i], *(uint16_t *)(msgBuffer+i+1), *(uint16_t *)(msgBuffer+i+3));
-          Serial.println();
+          Serial.print("\n");
                
           break;
      case REP_TOUCH_PRED:
@@ -669,31 +702,31 @@ void TSP::processByte (uint8_t b) {
                              msgBuffer[i], *(uint16_t *)(msgBuffer+i+1), *(uint16_t *)(msgBuffer+i+3),
                              *(uint16_t *)(msgBuffer+i+5), *(uint16_t *)(msgBuffer+i+7));
           }
-          Serial.println();
+          Serial.print("\n");
           break;
      case REP_TOUCH_RAW:
           INDENT("Touch RAW ");
           for (byte i=0; i+1<msgLen; i+=5) 
                Serial.printf("[ ID=%02X (%d,%d) ] ", msgBuffer[i], *(uint16_t *)(msgBuffer+i+1), *(uint16_t *)(msgBuffer+i+3));
-          Serial.println();
+          Serial.print("\n");
           break;               
      case REP_TOUCH_P16:
           INDENT("Touch Pos16 (pen?) ");
           for (byte i=0; i+1<msgLen; i+=5) 
                Serial.printf("[ ID=%02X (%d,%d) ] ", msgBuffer[i], *(uint16_t *)(msgBuffer+i+1), *(uint16_t *)(msgBuffer+i+3) );
-          Serial.println();
+          Serial.print("\n");
           break;              
      case REP_SELF_RAW:
           INDENT("SelfRaw [ ");
           for (byte i=0; i+1<msgLen; i+=2) 
                Serial.printf("%04X ", *(uint16_t *)(msgBuffer+i));
-          Serial.println("]");
+          Serial.print("]\n");
           break;               
      case REP_SELF_NORM:
           INDENT("SelfNorm [ ");
           for (byte i=0; i+1<msgLen; i+=2) 
                Serial.printf("%04X ", *(uint16_t *)(msgBuffer+i));
-          Serial.println("]");
+          Serial.print("]\n");
           break; 
      case REP_VER:                             // Get version
           INDENT("Firmware release r%d\n",*(uint16_t *)(msgBuffer+1));
@@ -701,10 +734,15 @@ void TSP::processByte (uint8_t b) {
           break;
 
      default:
+#ifdef DEBUG
           INDENT("Ignoring REPly %02x with data [", currentCmd);
           for (byte i=0; i<msgLen-1; ++i) // msglen contains command
                Serial.printf("%02X",msgBuffer[i]);
-          Serial.println(']');
+          Serial.print("]\n");
+#else
+          gobble(0x01);
+#endif
+          
           break;
      }
      msgLen = 0;
@@ -743,7 +781,7 @@ void TSP::interpretReply() {
  * 
  **/
 void TSP::printVersion() {
-     Serial.println("Firmware Version");
+     Serial.print("Firmware Version\n");
      sendCommand(CMD_VER,NULL,0);
      delayAndPoll(10);
      // interpretReply();
@@ -783,4 +821,21 @@ void TSP::setParameter(uint16_t addr, uint32_t data, uint32_t mask) {
      sendCommand(CMD_SETPARAM, buffer, 10);
      delayAndPoll(1);
      // interpretReply();    
+}
+
+void TSP::baseline() {
+     sendCommand(CMD_FORCEBASELINE,NULL,0); // Get a baseline noise measurement
+     calibrating = 2;
+     delayAndPoll(2);
+}
+
+void TSP::transmit() {
+     Serial.print("\nFRAME\n");     
+     Serial.write((uint8_t *)mut, NUM_TX * NUM_RX * 2); // Two bytes per item
+     // for (byte r = 0; r<NUM_RX; ++r) {
+     //      // interpretReply();
+     //      for (byte t=0; t<NUM_TX; ++t)
+     //           Serial.printf(" %x", mut[r][t]);//- cal[r][t]);
+     //      Serial.print("\n");
+     // }
 }

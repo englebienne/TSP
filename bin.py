@@ -27,8 +27,18 @@ def resync(ser):
         except:
             print("Undecodable buffer of length ", len(buf));
 
+def printable(b):
+    b = chr(b)
+    if b>='a' and b<='z':
+        return True
+    if b>='A' and b<='Z':
+        return True
+    if b>='0' and b<='9':
+        return True
+    return b in ['[',']','.',',','{','}']
+            
 def readFrame(ser):
-    length = 27*19*2 + 1
+    length = 27*19 + 1
     res = ser.read(length)
     length -= len(res)
     while length != 0:
@@ -36,6 +46,10 @@ def readFrame(ser):
         length -= len(l)
         res += l
 
+    # for b in res:
+    #     if printable(b):
+    #         print(chr(b),end='')
+                                  
     return res
 
     
@@ -51,7 +65,7 @@ while True:
             # print(len(l))
             r=0
             c=0
-            for v in struct.iter_unpack("<H",l[:-1]): # strip the \n
+            for v in struct.iter_unpack("<B",l[:-1]): # strip the \n
                 img[26-r][c] = v[0]
                 c+=1
                 if c==cols:

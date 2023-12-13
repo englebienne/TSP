@@ -28,7 +28,7 @@ def resync(ser):
             print("Undecodable buffer of length ", len(buf));
 
 def readFrame(ser):
-    length = 27*19*2 + 1
+    length = 27*19 + 1
     res = ser.read(length)
     length -= len(res)
     while length != 0:
@@ -51,7 +51,7 @@ while True:
             # print(len(l))
             r=0
             c=0
-            for v in struct.iter_unpack("<H",l[:-1]): # strip the \n
+            for v in struct.iter_unpack("<B",l[:-1]): # strip the \n
                 img[26-r][c] = np.maximum(img[26-r][c],1.5*v[0])
                 c+=1
                 if c==cols:

@@ -14,9 +14,9 @@
 
 
 
-#define NVDM_MASK NVDM_MUTRAW
-// #define NVDM_MASK NVDM_MUTCACHE
-// #define NVDM_MASK NVDM_SELFNORM
+#define NVDM_MASK NVDM_MUTRAW   // Send raw data
+// #define NVDM_MASK NVDM_MUTCACHE // Send processed data
+// #define NVDM_MASK NVDM_SELFNORM // Send calibration data
 
 // #define NVAM_MASK NVAM_DIGITIZER | NVAM_BESTFREQ | NVAM_FULLSCAN
 // #define NVAM_MASK NVAM_BESTFREQ|NVAM_FULLSCAN
@@ -32,6 +32,7 @@
 #define REP_SCROLL          0xA1
 #define REP_TAP             0xA2
 #define REP_NOISE           0xB0
+#define REP_MUT_RAW         0xC2 // not documented in datasheet
 #define REP_MUT_NORM_SEC    0xC3
 #define REP_ACK             0xF0
 #define REP_PARAM_READ      0xCF
@@ -102,8 +103,6 @@
 #define INDENT(...) Serial.printf("" __VA_ARGS__)
 
 
-// const char* SPACE = " ";
-
 const uint8_t numRX = 27;
 
 // Not sure which of the following is right:
@@ -115,80 +114,62 @@ const uint8_t rxMap[numRX] = { 21, 22, 23, 24, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 
 
 #define MAXREAD 140
-void TSP::getData() {     
-     // if (digitalRead(IRQ_PIN) != LOW) { // Instead of checking `streamAvailable`, directly check pin.          
-     //      // Seems to be mostly low, even when no data in buffer. But no data seems to be in buffer when high
-     //      // Checking the STR bit in TOUCHSTATUS makes things a lot less stable          
-     //      Serial.print(".");
-     //      return;
-     // }
-     // Serial.print("SA");
-
+bool TSP::getData() {
+     bool dataread = false;
      for (uint8_t i=0; i<10; ++i) {             // Repeatedly read from the buffer to be sure we get everything we need
           Wire.beginTransmission(I2C_ADDR);
           Wire.write(I2C_MAP_TXRDY);
           if (byte res = Wire.endTransmission(false)) {
                Serial.printf("%s: Wire.endTransmission(false) returned %d\n", __PRETTY_FUNCTION__, res);
                // delayMicroseconds(100);
-               return;
+               reset();
+               return false;
           }
           Wire.requestFrom(I2C_ADDR,(uint8_t)1);
           byte n = Wire.read();
           if (byte res = Wire.endTransmission()) {
                Serial.printf("%s: Wire.endTransmission() returned %d\n", __PRETTY_FUNCTION__, res);
-               if (res == 5)
-                    reset();
-               // delayMicroseconds(100);
+               // if (res == 5)
+               reset();
           }
           
           if (n == 0 || n==255)  {
-               // Serial.print("x");
-               return;
+               return dataread;
           }
 
           byte touchstatus;
           getRegisters(I2C_MAP_TOUCHSTATUS,1, &touchstatus);
           if (!(touchstatus & 0x10)) {
                Serial.printf("n=%d, but STR not set\n", n);
-               return;
+               return false;
           }
 
           if (n>MAXREAD)
                n = MAXREAD;
 
-          // Serial.printf("getData %d bytes... ",n);
-          // while (Wire.available()) {
-          //      Serial.printf("WTF YO ");
-          //      circBuffer[wrIdx] = Wire.read();
-          //      if ( (wrIdx+1) % buflen == rdIdx)
-          //           Serial.printf("ERROR: WRITE POINTER CAUGHT UP WITH READ POINTER!\n");
-          //      incIdx(wrIdx);
-          // }
-               
           Wire.beginTransmission(I2C_ADDR);
           Wire.write(I2C_MAP_TXBUF);
           if (byte res = Wire.endTransmission(false)) {
                Serial.printf("%s: Wire.endTransmission(false) - 2 - returned %d\n", __PRETTY_FUNCTION__, res);
                // delayMicroseconds(10);
-               return;
+               // for (byte x=0; x!=10; ++x);
+               reset();
+               return false;
           }
           n = Wire.requestFrom(I2C_ADDR,(uint8_t)n);
           if (byte res = Wire.endTransmission()) {
-               // Wire.clearTimeoutFlag();
                Serial.printf("%s: Wire.endTransmission() - 2 - returned %d after getting %d bytes\n", __PRETTY_FUNCTION__, res, n);
-               // delayMicroseconds(10);
+               // for (byte x=0; x!=10; ++x);
+               reset();
+               return false;
           }
           // Serial.printf("got %d\n",n);
 
           while (Wire.available()) {
                --n;
-               // circBuffer[wrIdx] = Wire.read();
-               // Serial.printf("%02X@%d ",circBuffer[wrIdx], wrIdx);
-               // if ( (wrIdx+1) % buflen == rdIdx)
-               //      Serial.printf("ERROR: WRITE POINTER CAUGHT UP WITH READ POINTER!\n");
-               // incIdx(wrIdx);
                processByte(Wire.read());
           }
+          dataread = true;
           // for (int x=0; i!=10; ++x);
           // delayMicroseconds(1); // Not sure this is needed, but being too fast makes things less stable... Being too slow too?
      }
@@ -203,9 +184,8 @@ void TSP::getData() {
  **/
 void TSP::delayAndPoll(uint16_t msec) {
      for (uint16_t i=0; i!=msec; ++i) {
-          interpretReply();
-          for (int i=0; i!=2; ++i);
-          // delayMicroseconds(1);
+          if (!interpretReply())
+               for (int i=0; i!=100; ++i);
      }
 }
 
@@ -222,8 +202,8 @@ void TSP::init() {
 
      // Setup I2C connection
      Wire.begin();
-     Wire.setClock(480000);
-     Wire.setTimeout(1000);
+     Wire.setClock(480000);     // Can be overclocked a little?
+     Wire.setTimeout(100);
 
      reset();
 }
@@ -237,11 +217,14 @@ void TSP::reset() {
      digitalWrite(TSP_RESET_PIN,HIGH);
      delay(100);                // Delay of 1 resulted in NACKs -> Reset works :-)
 
-     printParameter(PAR_NVAM);  // Get the list of currently active modules     
-     setParameter(PAR_NVAM, 0x0, NVAM_FULLMASK); // Disable all modules while parameters are set
-
-     delayAndPoll(1);
-     printParameter(PAR_NVAM);  // debug: Verify everything's off (it is)
+     // printParameter(PAR_NVAM);  // Get the list of currently active modules     
+     // setParameter(PAR_NVAM, 0x0, NVAM_FULLMASK); // Disable all modules while parameters are set
+     setParameter(PAR_NVAM, 0x0, 0xffff); // Disable all modules while parameters are set
+     delayAndPoll(100);
+     sendCommand(CMD_FORCEBASELINE,NULL,0); // Get a baseline noise measurement
+     delayAndPoll(1000);
+     // printParameter(PAR_NVAM);  // debug: Verify everything's off (it is)
+     // delayAndPoll(10);
 
      // for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - OUT pin map
      //      delayAndPoll(1);
@@ -261,19 +244,14 @@ void TSP::reset() {
      // }
      // delayMicroseconds(2000);
 
-     // setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
-     //              NVAM_DECODE | NVAM_DIGITIZER | NVAM_AUTOBASE | NVAM_BESTFREQ | NVAM_FULLSCAN,
-     //              NVAM_FULLMASK);
      setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
                   NVAM_MASK,
                   NVAM_FULLMASK);
-     delayAndPoll(1);
+     delayAndPoll(10);
      printParameter(PAR_NVAM);  // Verify the modules are activated
      delayAndPoll(1);
-     sendCommand(CMD_FORCEBASELINE,NULL,0); // Get a baseline noise measurement
-     delayAndPoll(2);
 
-     setParameter(PAR_NVDM,     // Activate debug modules. I want to figure out how to read raw capacitance measurements
+     setParameter(PAR_NVDM,     // Activate debug modules. 
                   NVDM_MASK,
                   NVDM_MASK);
      
@@ -293,8 +271,10 @@ void TSP::reset() {
 byte TSP::getRegisters(byte reg, byte size, byte *buffer) {
      Wire.beginTransmission(I2C_ADDR);
      Wire.write(reg);
-     if (uint8_t res = Wire.endTransmission(false))
+     if (uint8_t res = Wire.endTransmission(false)) {
           Serial.printf("[TSP getRegisters] endTransmission failed: %d\n", res);
+          reset();
+     }
 
      Wire.requestFrom(I2C_ADDR, size);
      byte i = 0;
@@ -302,8 +282,10 @@ byte TSP::getRegisters(byte reg, byte size, byte *buffer) {
           buffer[i++] = Wire.read();
 
      // Is this necessary?
-     if (uint8_t res = Wire.endTransmission(true))
+     if (uint8_t res = Wire.endTransmission(true)) {
           Serial.printf("[TSP getRegisters] endTransmission failed: %d\n", res);
+          reset();
+     }
      return i;
 }
 
@@ -612,25 +594,15 @@ void TSP::processByte (uint8_t b) {
           printBuffer(msgBuffer+1,msgLen-2);
           break;
      case REP_MUT_NORM_SEC:
-          // INDENT("MutNorm rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
-          // for (byte i=2; i < msgLen; i+=2) 
-          //      Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
-          // Serial.println("]");
-          // Serial.printf("MNS %d ", cnt++);
-
           if (msgBuffer[0] == 0) {
-               // Serial.print("\n");
-               // for (byte r = 0; r<NUM_RX; ++r) {
-               //      for (byte t=0; t<NUM_TX; ++t)
-               //           Serial.printf(" %3d", mut[r][t]); //-cal[r][t]);
-               //      Serial.print("\n");
-               // }
                transmit();
                if (calibrating != 0)
                     calibrating--;
           }
           for (byte i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++t) {
                uint16_t v = *(uint16_t *)(msgBuffer+i);
+               if (r>=NUM_RX)
+                    break;
                if (t < NUM_TX) {
                     mut[r][t] = v;
                     if (calibrating) 
@@ -639,12 +611,7 @@ void TSP::processByte (uint8_t b) {
           }
                          
           break;
-     case 0xC2:
-          // INDENT("Raw Mut? rx=%d, tx=%d, nodes=[",msgBuffer[0],msgBuffer[1]);
-          // for (byte i=2; i < msgLen; i+=2) 
-          //      Serial.printf(" %04x", *(uint16_t *)(msgBuffer+i));
-          // Serial.println("]");
-
+     case 0xC2: // REP_MUT_RAW
           if (msgBuffer[0] == 0) {
                transmit();
                if (calibrating != 0)
@@ -652,28 +619,25 @@ void TSP::processByte (uint8_t b) {
           }
           for (byte i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++t) {
                uint16_t v = *(uint16_t *)(msgBuffer+i);
-               if (r < NUM_RX && t < NUM_TX) {
+               if (r>=NUM_RX)
+                    break;
+               if (t < NUM_TX) {
                     if (cal[r][t]<v) {
                          // cal[r][t] = v; // Update calibration?
+                         // mut[r][t]=v-cal[r][t];
                          mut[r][t]=0;
-                    } else
-                         mut[r][t] = cal[r][t]-v;
+                    } else {
+                         uint16_t d = cal[r][t]-v;
+                         if (d>255)
+                              mut[r][t] = 255;
+                         else
+                              mut[r][t] = d;
+                    }
                     if (calibrating) 
                          cal[r][t] = v;
                }
           }
-          // for (byte c=0, i=2, r=msgBuffer[0],t=msgBuffer[1]; i < msgLen; i+=2,++c)
-          //      if (r < NUM_RX && t+c < NUM_TX) {
-          //           mut[r][t+c] = *(uint16_t *)(msgBuffer+i)-cal[r][t+c];
-          //           // if (mut[r][t+c] > 10000)
-          //           //      mut[r][t+c] = 0;
-          //           if (calibrating) 
-          //                cal[r][t+c] = *(uint16_t *)(msgBuffer+i);
-          //      }
-               
-
           break;
-
           
      case REP_PARAM_READ:
           interpretParam(msgBuffer);
@@ -759,19 +723,8 @@ void TSP::processByte (uint8_t b) {
  * 2023/11/30: GWENN - First version
  * 
  **/
-void TSP::interpretReply() {
-     // Serial.printf("before gd r=%d, w=%d %02x ", rdIdx,wrIdx,circBuffer[rdIdx]);
-     // getData();                 // Poll for data
-     // Serial.printf("after gd r=%d, w=%d %02x ", rdIdx,wrIdx,circBuffer[rdIdx]);
-     
-     // while (rdIdx != wrIdx) {   // exit when no data left in queue
-     //      Serial.printf("before pr  r=%d, w=%d %02x \n", rdIdx,wrIdx,circBuffer[rdIdx]);
-     //      processByte(circBuffer[rdIdx]);
-     //      Serial.printf("after  pr  r=%d, w=%d %02x \n", rdIdx,wrIdx,circBuffer[rdIdx]);
-     //      incIdx(rdIdx);
-     //      Serial.printf("after  inc r=%d, w=%d %02x \n", rdIdx,wrIdx,circBuffer[rdIdx]);
-     // }
-     getData();
+bool TSP::interpretReply() {
+     return getData();                 // Poll for data
 };
 
 /**
@@ -784,7 +737,6 @@ void TSP::printVersion() {
      Serial.print("Firmware Version\n");
      sendCommand(CMD_VER,NULL,0);
      delayAndPoll(10);
-     // interpretReply();
 }
 
 /**
@@ -799,7 +751,6 @@ void TSP::printParameter(uint16_t addr) {
      Serial.printf("Getting parameter %04X\n", *(uint16_t *)c);
      sendCommand(CMD_GETPARAM, c, 2);
      delayAndPoll(1);
-     // interpretReply();
 }
 
 /**
@@ -831,7 +782,7 @@ void TSP::baseline() {
 
 void TSP::transmit() {
      Serial.print("\nFRAME\n");     
-     Serial.write((uint8_t *)mut, NUM_TX * NUM_RX * 2); // Two bytes per item
+     Serial.write((uint8_t *)mut, NUM_TX * NUM_RX);
      // for (byte r = 0; r<NUM_RX; ++r) {
      //      // interpretReply();
      //      for (byte t=0; t<NUM_TX; ++t)

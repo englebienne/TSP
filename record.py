@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import serial,struct
+import json
 import sys
 import time
 import cv2
@@ -9,10 +10,18 @@ import numpy as np
 NUM_ROW = 27
 NUM_COL = 19
 
+filename = "output.json"
 portname = "/dev/ttyUSB0"
 if len(sys.argv) > 1:
-    portname = sys.argv[1]
+    filename = sys.argv[1]
+if len(sys.argv) > 2:
+    portname = sys.argv[2]
 
+print("""
+Recording input to: %s
+Reading from port:  %s""" % (filename, portname))
+    
+data = []
 
 def resync(ser):
     print("Re-syncing stream")
@@ -31,6 +40,9 @@ def resync(ser):
             print("Undecodable buffer of length ", len(buf));
 
 def printable(b):
+    """
+    Check in binary data whether perhaps there are error messages in it
+    """
     b = chr(b)
     if b>='a' and b<='z':
         return True
@@ -54,36 +66,48 @@ def readFrame(ser):
     #         print(chr(b),end='')
                                   
     return res
-
-
-start = time.time()
-N=0;
+    
+sep = True
 while True:
     with serial.Serial(portname, 921600, timeout=1) as ser:
         resync(ser)
         rows,cols = NUM_ROW,NUM_COL
         img = np.zeros((rows,cols))
+        tot = img.copy()
 
         while True:
-            N+=1
-            # print(N,time.time()-start,N/(time.time()-start))
             l = readFrame(ser)
+            # print(len(l))
+
             i=0
             for r in range(NUM_ROW):
                 for c in range(NUM_COL):
                     img[r][c] = 1.5*(l[i]-3)
                     i+=1
+                    
+            img = np.clip(img, 0,255)
+            img = cv2.rotate(img, cv2.ROTATE_180)
+            tot = np.maximum(tot,img)
 
-            tmp = cv2.resize(cv2.rotate(np.clip(img,0,255), cv2.ROTATE_180),(rows*40,cols*40))
+            data.append( { "time": time.time(), "label": None, "sep": sep, "frame": img.tolist() })
+            sep = False
+            
+            tmp = cv2.resize(tot,(rows*20,cols*20))
             cv2.imshow("test", tmp.astype(np.uint8))
             k = chr(cv2.waitKey(1) & 0xff)
             if k ==  'q':
+                with open(filename, "w") as f:
+                    json.dump(data, f,indent=0)
                 exit(0)
-            if k == 'c' or k == 'r':
-                ser.write(bytes([1]));
-                r = 0
-                continue
-
+            
+            if (k >= '0' and k <= '9') or (k>='a' and k<='z'):
+                tot = np.zeros((rows,cols))
+                i = len(data)-1
+                sep = True
+                while i>=0 and not data[i]["label"]:
+                    data[i]["label"] = k
+                    i-=1
+                    
             l = ser.read(6)
             if l.decode() != "FRAME\n":
                 print("Lost sync '%s'" % (l.decode()))
@@ -91,5 +115,3 @@ while True:
 
             
             
-
-

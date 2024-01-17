@@ -1,0 +1,16 @@
+#!/usr/bin/zsh
+
+while true; do
+    if [[ -e /dev/ttyUSB0 ]]; then
+        print "EPS Connected, flashing"
+	arduino-cli upload -l serial -p /dev/ttyUSB0 -b esp32:esp32:featheresp32 testTSP.ino
+        # flash
+        while [[ -e /dev/ttyUSB0 ]]; do
+            sleep .5
+        done
+        print "ESP disconnected"
+    # else
+    #     print "No ESP connected"
+    fi
+    sleep .5
+done

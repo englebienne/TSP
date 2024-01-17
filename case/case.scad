@@ -1,7 +1,7 @@
 $fn=50;
 
 // Delta for making sure differences don't leave a zero-width plane
-d=.1;
+d=.01;
 dd = 2*d;
 lots = 100;                    /* Just something big, when the size of the difference doesn't matter */
 
@@ -15,7 +15,8 @@ headerX = 5;
 headerY = .5;
 headerZ = 2;                    /* Elevation off the board of the bottom of the horizontal pins */
 
-headerW = 18;
+bridgeW = 1;
+headerW = 18 + 2*bridgeW;
 headerD = 2;                    /* Depth of the on-board connector */
 headerH = 3;                    /* Height of the horizontal pins */
 headerHeight = headerZ+headerH;
@@ -37,7 +38,7 @@ espY = 10;
 
 espUsbY = 8;
 espUsbD = 12;
-clearance = 6.3; // Clearance between board top and ESP
+clearance = 5.8; // Clearance between board top and ESP
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Definition of a mock-up of the board with connectors
@@ -89,7 +90,7 @@ screwY = 65;
 screwX2 = 60;
 screwH = 3;
 screwHead = 3; //M3
-screwInner=1.2;//diam 2.4
+screwInner= 1.2;// works for M2 screws! (M3 is diam 2.45 officially)
 screwOuter = 1.5; // diam 3.0
 
 module ribs(num, dist, width, height) {
@@ -100,6 +101,7 @@ module ribs(num, dist, width, height) {
 
 slitTol = 1;
 dSlitTol = 2*slitTol;
+lowerTongueDepressorHeight = 1.4;
 module lower () {
      difference () {
           cube([boxWidth, boxDepth, boxHeight]);
@@ -130,7 +132,8 @@ module lower () {
                     translate([-d,boardDepth+dtol,-d]) cube([20+dd,sw,ledgeHeight+boardHeight+d]); /* Fixing wall for board */
                     translate([50,boardDepth+dtol,-d]) cube([20+dd,sw,ledgeHeight+boardHeight+d]); /* Fixing wall for board */
                     // ribs
-                    translate([15,boardDepth,-0]) ribs(6,2,40,.8);
+                    translate([0,boardDepth+dtol,-d]) cube([lots,lots,lowerTongueDepressorHeight+d]);
+                    translate([15,boardDepth+2*dtol,lowerTongueDepressorHeight-d]) ribs(6,2,40,1+d);
                     for (x = [screwX,screwX2])
                          translate([x-sw,screwY-sw,0]) 
                               cylinder(h=screwH, r=5);
@@ -165,22 +168,31 @@ module middle () {
                          cube([boxWidth+dd,boxDepth+dd,boxHeight]); /* Cube the size of the box */
                     translate([sw,sw,-d])
                          cube([boxWidth-2*sw,boxDepth-2*sw,lots]); /* Inside to take away so we're left with the walls */
+               // Header slit
+                    translate([d+sw+tol+headerX-slitTol,-2*sw,boxHeight-lots])
+                         cube([headerW+dSlitTol-dd,5*sw,lots]);
                }
                difference () {
                     /* Hollow out lid, leave the tongue depressor and the cradle for ESP32 */
                     translate([2*sw,2*sw,-d])
                          cube([boxWidth-4*sw,boxDepth-4*sw,middleHeight-lidHeight+dd]); /* Take away the inside of the box */
-                    translate([tongueMid-.5*tongueWidth,45+sw+tol,tongueHeight-boardHeight-ledgeHeight])
-                         cube([tongueWidth,lots,lots]);
+                    /* translate([tongueMid-.5*tongueWidth,55+sw+tol,tongueHeight-boardHeight-ledgeHeight]) */
+                    /*      cube([tongueWidth,lots,lots]); */
+                    translate([-d,55+sw+tol,tongueHeight-boardHeight-ledgeHeight])
+                         cube([lots,lots,lots]);
                     for (x = [screwX,screwX2])
                          translate([x,screwY,screwH-bwh-ledgeHeight]) 
                               cylinder(h=lots, r=3);
 
                     /* Cradle for the ESP32 */
-                    translate([espX-tol,espY-fixD,clearance]) // mount 1
-                         cube([espW+dtol,fixD,lots]);
-                    translate([espX-tol,espY+espD,clearance]) // Mount 2
-                         cube([espW+dtol,fixD,lots]);
+                    /* translate([espX-tol,espY-fixD,clearance]) // mount 1 */
+                    /*      cube([espW+dtol,fixD,lots]); */
+                    /* translate([espX-tol,espY+espD,clearance]) // Mount 2 */
+                    /*      cube([espW+dtol,fixD,lots]); */
+                    translate([0,espY-fixD,clearance]) // mount 1
+                         cube([lots,fixD,lots]);
+                    translate([0,espY+espD,clearance]) // Mount 2
+                         cube([lots,fixD,lots]);
 
                     lipL = 10;
                     for (i = [10:3*lipL:espW]) {
@@ -200,19 +212,21 @@ module middle () {
                translate([sw+tol+headerX-slitTol,-2*sw,headerHeight+slitTol-lots])
                     cube([headerW+dSlitTol,5*sw,lots]);
                // Header opening in top
-               translate([sw+tol+headerX-slitTol,headerY+sw+tol-slitTol,-d])
-                    cube([headerW+dSlitTol,headerD+dSlitTol,lots]);          
+               /* translate([sw+tol+headerX-slitTol,headerY+sw+tol-slitTol-d,-d]) */
+               /*      cube([headerW+dSlitTol,headerD+dSlitTol+d,lots]); */
+               translate([sw+tol+headerX-slitTol+bridgeW,headerY+sw+tol-slitTol-d,-d])
+                    cube([headerW+dSlitTol-2*bridgeW,headerD+dSlitTol+d,lots]);
                // USB slit
                translate([-d,usbY+sw,-d]) // Did not subtract tol from y, because board can slide by tol in either direction
                     cube([2*sw+dd,usbDepth+dtol,usbHeight+tol+d]);
                // ESP USB slit in wall
                translate([boxWidth-2*sw-d,espY+espUsbY,-d])
-                    cube([lots,espUsbD,middleHeight-lidHeight-boardHeight-tol+d]);
+                    cube([lots,espUsbD,middleHeight-lidHeight-boardHeight+d]);
                // ESP USB cutout in lid, for cable connector
                translate([boxWidth-sw,espY+espUsbY,-d])
                     cube([lots,espUsbD,lots]);
 
-               translate([16,boxDepth-15,middleHeight-.8]) linear_extrude(1) text("Create",size=10);
+               translate([16,boxDepth-15,middleHeight-.8]) linear_extrude(1) text("CreaTe",size=9);
                translate([16,boxDepth-25,middleHeight-.8]) linear_extrude(1) text("Hands-On AI",size=5);
 
                for (x = [screwX,screwX2]) {
@@ -222,8 +236,8 @@ module middle () {
 
           }
 
-          translate([tongueMid-.5*tongueWidth,50,tongueHeight-boardHeight-ledgeHeight-.8])
-               ribs(7,2,tongueWidth,.8+d); /* Add ribs to the top */
+          translate([tongueMid-.5*tongueWidth,60,tongueHeight-boardHeight-ledgeHeight-.8-d])
+               ribs(4,2,tongueWidth,1.0+d); /* Add ribs to the top */
           translate([0,usbY+sw,usbHeight+tol])
                cube([sw+d,usbDepth+dtol,middleHeight-(usbHeight+dtol)]); // Let wall fill up USB slit in lower part
           /* translate([10,10,]) linear_extrude(1) text("Hands-on AI",size=10,halign="center"); */
@@ -246,9 +260,9 @@ module slices(sep=10,w=5) {
 difference () {
      union () {
          /* color(c=[1,0,0],alpha=.3) translate([sw+tol,sw+tol,bwh+ledgeHeight]) board(); */
-          color(c=[.5,.5,.9],alpha=.9) lower();
+         color(c=[.5,.5,.9],alpha=.9) lower();
           color([.3,1,.5,.5]) translate([-2,0,middleHeight]) rotate([0,180,0]) middle();
-          /* color([.3,1,.5,.3]) translate([0,0,boardTop]) middle(); */
+          color([.3,1,.5,.3]) translate([0,0,boardTop]) middle();
      };
      /* slices(70,30); */
 };

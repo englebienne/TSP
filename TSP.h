@@ -53,6 +53,8 @@ public:
 
      void baseline();
      void transmit();
+
+     const char *getVersion() const { return "V. 1.0"; }
 };
 
 #endif  /* TSP_H */

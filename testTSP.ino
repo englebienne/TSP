@@ -16,8 +16,11 @@ void setup() {
      Serial.begin(921600, SERIAL_8N1);
      while (!Serial) 
           delay(10);
-  
-     Serial.printf("\nStarting connection with TSP\n");
+
+     delay(1000);
+     Serial.printf("ESP32 reboot");
+     Serial.printf("\n\nTouch-Sensitive Patch Driver Version %s\n", tsp.getVersion());
+     
      tsp.init();
 }
 

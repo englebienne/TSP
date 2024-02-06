@@ -104,7 +104,7 @@ dSlitTol = 2*slitTol;
 lowerTongueDepressorHeight = 1.4;
 module lower () {
      difference () {
-          cube([boxWidth, boxDepth, boxHeight]);
+          rcube([boxWidth, boxDepth, boxHeight],sw);
           union () { // Stuff to remove:
                // bulk centre
                translate([sw,sw,bwh]) difference () {
@@ -148,6 +148,19 @@ module lower () {
      }
 }
 
+module rcube(dim, r=1) {
+     hull () {
+          translate([r,r,0])
+                    cylinder(r=r,h=dim[2]);
+          translate([dim[0]-r,r,0])
+                    cylinder(r=r,h=dim[2]);
+          translate([r,dim[1]-r,0])
+                    cylinder(r=r,h=dim[2]);
+          translate([dim[0]-r,dim[1]-r,0])
+                    cylinder(r=r,h=dim[2]);
+     }
+}
+
 boardTop = bwh+ledgeHeight+boardHeight; /* Height at which the top of the board sits */
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -162,7 +175,7 @@ espX = boxWidth-2*sw-espW;
 module middle () {
      union () {
           difference () {
-               cube([boxWidth,boxDepth,middleHeight]); /* Cube the size of the box */
+               rcube([boxWidth,boxDepth,middleHeight],sw); /* Cube the size of the box */
                difference () {                      /* Outer walls of the box */
                     translate([-d,-d,-boardTop])
                          cube([boxWidth+dd,boxDepth+dd,boxHeight]); /* Cube the size of the box */
@@ -257,17 +270,45 @@ module slices(sep=10,w=5) {
 // slices(10);
 // Final elements
 
-difference () {
+module sliced(sep=50,w=35) {
+     difference () {
+          children();
+          slices(sep,w);
+     }
+}
+
+module production () {
      union () {
          /* color(c=[1,0,0],alpha=.3) translate([sw+tol,sw+tol,bwh+ledgeHeight]) board(); */
          color(c=[.5,.5,.9],alpha=.9) lower();
           color([.3,1,.5,.5]) translate([-2,0,middleHeight]) rotate([0,180,0]) middle();
+          /* color([.3,1,.5,.3]) translate([0,0,boardTop]) middle(); */
+     };
+     /* slices(70,30); */
+};
+
+module closed () {
+     union () {
+         color(c=[1,0,0],alpha=.3) translate([sw+tol,sw+tol,bwh+ledgeHeight]) board();
+         color(c=[.5,.5,.9],alpha=.9) lower();
+          /* color([.3,1,.5,.5]) translate([-2,0,middleHeight]) rotate([0,180,0]) middle(); */
           color([.3,1,.5,.3]) translate([0,0,boardTop]) middle();
      };
      /* slices(70,30); */
 };
 
+module exploded() {
+     union () {
+         color(c=[.5,.5,.9],alpha=.5) lower();
+         color(c=[1,0,0],alpha=.5) translate([sw+tol,sw+tol,30]) board();
+          /* color([.3,1,.5,.5]) translate([-2,0,middleHeight]) rotate([0,180,0]) middle(); */
+          color([.3,1,.5,.5]) translate([0,0,50]) middle();
+     };
+};
 
+//production();
+//sliced() closed();
+exploded();
 /* w = 100; */
 /* h = 70; */
 /* t = 2; */

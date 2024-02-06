@@ -74,7 +74,7 @@ while True:
                     img[r][c] = 1.5*(l[i]-3)
                     i+=1
 
-            tmp = cv2.resize(cv2.rotate(np.clip(img,0,255), cv2.ROTATE_180),(rows*40,cols*40))
+            tmp = cv2.resize(cv2.rotate(np.clip(img,0,255), cv2.ROTATE_180),(rows*30,cols*40))
             cv2.imshow("test", tmp.astype(np.uint8))
             k = chr(cv2.waitKey(1) & 0xff)
             if k ==  'q':

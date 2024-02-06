@@ -780,8 +780,10 @@ void TSP::baseline() {
      delayAndPoll(2);
 }
 
+const byte sep = 0xff;
 void TSP::transmit() {
-     Serial.print("\nFRAME\n");     
+     Serial.print("\nFRAME\n");
+     // Serial.write(&sep, 1);
      Serial.write((uint8_t *)mut, NUM_TX * NUM_RX);
      // for (byte r = 0; r<NUM_RX; ++r) {
      //      // interpretReply();

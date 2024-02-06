@@ -18,8 +18,9 @@ void setup() {
           delay(10);
 
      delay(1000);
-     Serial.printf("ESP32 reboot");
-     Serial.printf("\n\nTouch-Sensitive Patch Driver Version %s\n", tsp.getVersion());
+//     Serial.printf("ESP32 reboot");
+     Serial.printf("\n  +++ Touch-Sensitive Patch Driver Version %s\n", tsp.getVersion());
+     Serial.printf("  +++ Resolution %s\n", tsp.getResolution());
      
      tsp.init();
 }

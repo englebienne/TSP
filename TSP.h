@@ -13,6 +13,9 @@
 #define NUM_RX 27
 #define NUM_TX 19
 
+#define STRH(x) #x
+#define STR(x) STRH(x)
+
 class TSP {
      uint8_t lastAck;
 
@@ -54,7 +57,8 @@ public:
      void baseline();
      void transmit();
 
-     const char *getVersion() const { return "V. 1.0"; }
+     const char *getVersion() const { return "V. 2.0"; }
+     const char *getResolution() const { return "RX=" STR(NUM_RX) " TX=" STR(NUM_TX); }
 };
 
 #endif  /* TSP_H */

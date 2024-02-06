@@ -1,9 +1,12 @@
 #!/usr/bin/zsh
 
+echo "Ready to Flash"
 while true; do
     if [[ -e /dev/ttyUSB0 ]]; then
         print "EPS Connected, flashing"
-	arduino-cli upload -l serial -p /dev/ttyUSB0 -b esp32:esp32:featheresp32 testTSP.ino
+	arduino-cli upload -l serial -p /dev/ttyUSB0 -b esp32:esp32:esp32da testTSP.ino
+        print "Flashing done. Swap in a new board"
+        aplay beep.wav
         # flash
         while [[ -e /dev/ttyUSB0 ]]; do
             sleep .5

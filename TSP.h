@@ -23,15 +23,19 @@ class TSP {
 
      static const uint16_t buflen = 1024;
      uint8_t  msgBuffer[512];
-     uint16_t cnt;
      uint16_t cal[NUM_RX][NUM_TX];
      uint8_t  mut[NUM_RX][NUM_TX];
      uint8_t  calibrating;
+     uint16_t cnt;
+     void (*framehandler) (uint8_t *frame, unsigned len);
      
 public:
+     uint8_t  locationInMsg, msgLen, currentCmd, gobbleTillCmdAck, gobbled;
+public:     
+
      TSP()
-          : gobbleTillCmdAck(0), locationInMsg(0), msgLen(0), currentCmd(0),
-            gobbled(0), cnt(0)
+          : cnt(0), locationInMsg(0), msgLen(0), currentCmd(0),gobbleTillCmdAck(0), 
+            gobbled(0)
           { };
      
      void init();
@@ -45,7 +49,6 @@ public:
      uint8_t  printTouches();
      void     readInfo();
      void     sendCommand(uint8_t cmd, const uint8_t *data, uint8_t len);
-     uint8_t  locationInMsg, msgLen, currentCmd, gobbleTillCmdAck, gobbled;
 
      void delayAndPoll(uint16_t usec);
      void interpretParam(uint8_t *buffer);
@@ -61,6 +64,9 @@ public:
 
      const char *getVersion() const { return "V. 2.1 TEST"; }
      const char *getResolution() const { return "RX=" STR(NUM_RX) " TX=" STR(NUM_TX); }
+     void registerFrameHandler(void (*handler)(uint8_t *frame, unsigned len)) {
+          framehandler = handler;
+     };
 };
 
 #endif  /* TSP_H */

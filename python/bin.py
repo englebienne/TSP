@@ -15,7 +15,8 @@ if len(sys.argv) > 1:
 
 
 def resync(ser):
-    print("Re-syncing stream")
+    # print("Re-syncing stream")
+    accel=False
     while True:
         buf = ser.readline()        
         # for b in buf:
@@ -23,8 +24,17 @@ def resync(ser):
         #         print(chr(b),end='')
         try:
             l = buf.decode()
+            # print(l)
+            if accel:
+                print(l, end='')
+                accel = False;
+                continue
+            if l[-4:] == "ACC\n":
+                # print("Acceleration");
+                accel = True
+                continue                
             if l[-6:] == "FRAME\n":
-                print("Start of frame")
+                # print("Start of frame")
                 break
                                   
         except:
@@ -41,7 +51,7 @@ def printable(b):
     return b in ['[',']','.',',','{','}']
             
 def readFrame(ser):
-    length = NUM_ROW*NUM_COL + 1 # one byte per measurement, plus newline character
+    length = NUM_ROW*NUM_COL     # one byte per measurement, plus newline character
     res = ser.read(length)       # Read the whole thing
     length -= len(res)           # If the serial port was slow
     while length != 0:           # keep reading more, until everything is read
@@ -55,39 +65,54 @@ def readFrame(ser):
                                   
     return res
 
+def saveFigure(img):
+    filename = cv2.imwrite(time.strftime("%Y-%m-%d.%H:%M:%S.jpg"),img)
 
 start = time.time()
 N=0;
 while True:
     with serial.Serial(portname, 921600, timeout=1) as ser:
-        resync(ser)
         rows,cols = NUM_ROW,NUM_COL
+        img = np.zeros((rows,cols,3))
         img = np.zeros((rows,cols))
 
         while True:
+            resync(ser)
             N+=1
-            # print(N,time.time()-start,N/(time.time()-start))
+            print(N,time.time()-start,N/(time.time()-start))
             l = readFrame(ser)
             i=0
             for r in range(NUM_ROW):
                 for c in range(NUM_COL):
-                    img[r][c] = 1.5*(l[i]-3)
+                    v = 1.0*(l[i])
+                    # img[r][c][0] = 0
+                    # img[r][c][1] = 0
+                    # img[r][c][2] = 0
+                    # if v<80:
+                    #     img[r][c][1] = 2*v
+                    # else:
+                    #     img[r][c][0] = v# 1.0*(l[i])
+                    img[r][c] = v# 1.0*(l[i])
                     i+=1
-
-            tmp = cv2.resize(cv2.rotate(np.clip(img,0,255), cv2.ROTATE_180),(rows*30,cols*40))
+            c = np.clip(img,0,255)
+#            print(c.min(),c.max(),c.mean())
+            tmp = cv2.resize(cv2.rotate(c, cv2.ROTATE_180),(rows*30,cols*40))
             cv2.imshow("test", tmp.astype(np.uint8))
             k = chr(cv2.waitKey(1) & 0xff)
             if k ==  'q':
                 exit(0)
+            if k == 's':
+                saveFigure(tmp.astype(np.uint8))
             if k == 'c' or k == 'r':
                 ser.write(bytes([1]));
                 r = 0
                 continue
 
-            l = ser.read(6)
-            if l.decode() != "FRAME\n":
-                print("Lost sync '%s'" % (l.decode()))
-                resync(ser)
+            # l = ser.read(6)
+            
+            # if l.decode() != "FRAME\n":
+            #     print("Lost sync '%s'" % (l.decode()))
+            #     resync(ser)
 
             
             

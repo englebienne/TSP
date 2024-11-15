@@ -14,6 +14,7 @@ TSP tsp;
 
 void setup() {
      Serial.begin(921600, SERIAL_8N1);
+     // Serial.begin(500000, SERIAL_8N1);
      while (!Serial) 
           delay(10);
 

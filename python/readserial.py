@@ -12,7 +12,9 @@ if len(sys.argv) > 2:
     portname = sys.argv[2]
 while True:
     try:
+        # with serial.Serial(portname, 500000, timeout=1) as ser:
         with serial.Serial(portname, 921600, timeout=1) as ser:
+        # with serial.Serial(portname, 230400, timeout=1) as ser:
             while True:
                 l = ser.read().decode()
                 print(l, end='')

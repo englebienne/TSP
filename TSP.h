@@ -18,6 +18,8 @@
 
 class TSP {
      uint8_t lastAck;
+     uint16_t lastNVDM, lastNVAM;
+     bool needReset;
 
      static const uint16_t buflen = 1024;
      uint8_t  msgBuffer[512];
@@ -57,7 +59,7 @@ public:
      void baseline();
      void transmit();
 
-     const char *getVersion() const { return "V. 2.0"; }
+     const char *getVersion() const { return "V. 2.1 TEST"; }
      const char *getResolution() const { return "RX=" STR(NUM_RX) " TX=" STR(NUM_TX); }
 };
 

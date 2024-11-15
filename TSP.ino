@@ -103,15 +103,17 @@
 #define INDENT(...) Serial.printf("" __VA_ARGS__)
 
 
-const uint8_t numRX = 27;
+const uint8_t numRX = NUM_RX;
+const uint8_t numTX = NUM_TX;
 
 // Not sure which of the following is right:
 // Indices are RX lines for each pin (seems most logical, and it turns out that the default values for the TX pins are, in this format, correspoding to the layout of the board):
-const uint8_t rxMap[numRX] = { 21, 22, 23, 24, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 25, 26, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 }; // < this is completely wrong.
+//const uint8_t rxMap[numRX] = { 21, 22, 23, 24, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 25, 26, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 }; // < this is completely wrong.
 // or
 // indices are pin numbers of each RX line:
 // const uint8_t rxMap[numRX] = { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 0, 1, 2, 3, 15, 16 };
-
+const uint8_t rxMap[numRX] = { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 0, 1, 2, 3, 4, 5, 19, 18, 17, 16, 27, 23, 22, 21, 20, 26, 24 }; // This is the default, and it's working
+const uint8_t txMap[numTX] = { 17, 18, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }; // This is the default, and it's working
 
 #define MAXREAD 140
 bool TSP::getData() {
@@ -121,16 +123,17 @@ bool TSP::getData() {
           Wire.write(I2C_MAP_TXRDY);
           if (byte res = Wire.endTransmission(false)) {
                Serial.printf("%s: Wire.endTransmission(false) returned %d\n", __PRETTY_FUNCTION__, res);
-               // delayMicroseconds(100);
-               reset();
+               delayMicroseconds(100);
+               needReset=true;
                return false;
           }
           Wire.requestFrom(I2C_ADDR,(uint8_t)1);
           byte n = Wire.read();
           if (byte res = Wire.endTransmission()) {
                Serial.printf("%s: Wire.endTransmission() returned %d\n", __PRETTY_FUNCTION__, res);
-               // if (res == 5)
-               reset();
+//               if (res == 5)
+               needReset=true;
+               return false;
           }
           
           if (n == 0 || n==255)  {
@@ -153,14 +156,14 @@ bool TSP::getData() {
                Serial.printf("%s: Wire.endTransmission(false) - 2 - returned %d\n", __PRETTY_FUNCTION__, res);
                // delayMicroseconds(10);
                // for (byte x=0; x!=10; ++x);
-               reset();
+               needReset=true;
                return false;
           }
           n = Wire.requestFrom(I2C_ADDR,(uint8_t)n);
           if (byte res = Wire.endTransmission()) {
                Serial.printf("%s: Wire.endTransmission() - 2 - returned %d after getting %d bytes\n", __PRETTY_FUNCTION__, res, n);
                // for (byte x=0; x!=10; ++x);
-               reset();
+               needReset=true;
                return false;
           }
           // Serial.printf("got %d\n",n);
@@ -202,18 +205,23 @@ void TSP::init() {
 
      // Setup I2C connection
      Wire.begin();
-     Wire.setClock(480000);     // Can be overclocked a little?
+     Wire.setClock(400000);     // Can be overclocked a little?
+     // Wire.setClock(480000);     // Can be overclocked a little?
      Wire.setTimeout(100);
 
-     reset();
+     needReset = true;
+     while (needReset) {
+          needReset = false;
+          reset();
+     }
 }
 
 void TSP::reset() {
      cnt = 0;
      calibrating = 2;
-     Serial.print("resetting\n");
+     Serial.print(" **** RESETTING ****\n");
      digitalWrite(TSP_RESET_PIN,LOW);      // Reset the MTCH6303
-     delay(100);
+     delay(200);
      digitalWrite(TSP_RESET_PIN,HIGH);
      delay(100);                // Delay of 1 resulted in NACKs -> Reset works :-)
 
@@ -221,6 +229,18 @@ void TSP::reset() {
      // setParameter(PAR_NVAM, 0x0, NVAM_FULLMASK); // Disable all modules while parameters are set
      setParameter(PAR_NVAM, 0x0, 0xffff); // Disable all modules while parameters are set
      delayAndPoll(100);
+
+     printParameter(PAR_NUM_RX_CHAN);
+     printParameter(PAR_NUM_TX_CHAN);
+     delayAndPoll(100);
+     setParameter(PAR_NUM_RX_CHAN,10,0xff);
+     delayAndPoll(100);
+     setParameter(PAR_NUM_TX_CHAN,10,0xff);
+     delayAndPoll(100);
+     printParameter(PAR_NUM_RX_CHAN);
+     delayAndPoll(100);
+     printParameter(PAR_NUM_TX_CHAN);
+     
      sendCommand(CMD_FORCEBASELINE,NULL,0); // Get a baseline noise measurement
      delayAndPoll(1000);
      // printParameter(PAR_NVAM);  // debug: Verify everything's off (it is)
@@ -230,19 +250,23 @@ void TSP::reset() {
      //      delayAndPoll(1);
      //      setParameter(0x0200+i, rxMap[i], 0xff);
      // }
-     // for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
-     //      delayAndPoll(10);
-     //      printParameter(0x0200+i);
-     // }
-     // for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - OUT pin map
-     //      delayAndPoll(10);
+     for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
+          printParameter(0x0200+i);
+          delayAndPoll(100);
+     }
+     // for (uint8_t i=0; i!=numRX; ++i) { // Set the RX - Precharge pin map
      //      setParameter(0x0240+i, rxMap[i], 0xff);
+     //      delayAndPoll(10);
      // }
      // for (uint8_t i=0; i!=numRX; ++i) { // debug Verify the RX - OUT pin map is well set
-     //      delayAndPoll(10q);
-     //      printParameter(0x0200+i);
+     //      printParameter(0x0240+i);
+     //      delayAndPoll(10);
      // }
      // delayMicroseconds(2000);
+     for (uint8_t i=0; i!=numTX; ++i) { // debug Verify the TX - OUT pin map is well set
+          printParameter(0x0280+i);
+          delayAndPoll(100);
+     }
 
      setParameter(PAR_NVAM,     // Activate relevant modules (I think. It's unclear from the dataset what they do, exactly
                   NVAM_MASK,
@@ -251,11 +275,17 @@ void TSP::reset() {
      printParameter(PAR_NVAM);  // Verify the modules are activated
      delayAndPoll(1);
 
-     setParameter(PAR_NVDM,     // Activate debug modules. 
-                  NVDM_MASK,
-                  NVDM_MASK);
+     lastNVDM=0;
+     while (lastNVDM != NVDM_MASK) {
+          setParameter(PAR_NVDM,     // Activate debug modules. 
+                       NVDM_MASK,
+                       NVDM_MASK);
      
-     printParameter(PAR_NVDM);  // debug: Check what's active
+          printParameter(PAR_NVDM);  // debug: Check what's active
+          delayAndPoll(10);
+     }
+
+     
 }
 
 /**
@@ -273,7 +303,9 @@ byte TSP::getRegisters(byte reg, byte size, byte *buffer) {
      Wire.write(reg);
      if (uint8_t res = Wire.endTransmission(false)) {
           Serial.printf("[TSP getRegisters] endTransmission failed: %d\n", res);
-          reset();
+          needReset=true;
+          return 0;
+          // reset();
      }
 
      Wire.requestFrom(I2C_ADDR, size);
@@ -284,7 +316,9 @@ byte TSP::getRegisters(byte reg, byte size, byte *buffer) {
      // Is this necessary?
      if (uint8_t res = Wire.endTransmission(true)) {
           Serial.printf("[TSP getRegisters] endTransmission failed: %d\n", res);
-          reset();
+          needReset=true;
+          return 0;
+          // reset();
      }
      return i;
 }
@@ -341,7 +375,12 @@ uint8_t TSP::printTouches() {
 void TSP::readInfo() {
      // uint8_t touchStatus = printTouches();
      // if (touchStatus & 0x10) // Stream ready
-          interpretReply();
+     needReset = false;
+     interpretReply();
+     if (needReset) {
+          // for(int i=0; i!=20; ++i);
+          reset();
+     }
 }
 
 /**
@@ -410,7 +449,7 @@ void TSP::interpretParam(uint8_t *buffer) {
      Serial.print("](");
      for (byte i=2; i<msgLen-1; ++i) // msglen contains command, buffer starts at addr.
           Serial.printf("%d,", buffer[i]);
-     Serial.print(")\n");
+     Serial.print(")");
 
      uint16_t addr = *(uint16_t *)buffer;
      uint16_t payload8 = *(uint8_t *)(buffer+2);
@@ -419,7 +458,7 @@ void TSP::interpretParam(uint8_t *buffer) {
      
      switch (addr) {
      case PAR_NVAM:
-          INDENT("Flags of NVAM register: [");
+          INDENT(" -> Flags of NVAM register: [");
 
           if (payload16 & NVAM_GEST)      Serial.print("GEST ");
           if (payload16 & NVAM_FULLSCAN)  Serial.print("FULLSCAN ");
@@ -431,10 +470,12 @@ void TSP::interpretParam(uint8_t *buffer) {
           if (payload16 & NVAM_DIGITIZER) Serial.print("DIGITIZER ");
           if (payload16 & NVAM_DECODE)    Serial.print("DECODE ");
           Serial.print("]\n");
+
+          lastNVAM = payload16; // Keep track of NVAM value to make sure that it is set correctly
           break;
           
      case PAR_NVDM:
-          INDENT("Flags of NVDM register: [");
+          INDENT(" -> Flags of NVDM register: [");
 
 #define BITP(b) if (payload16 & NVDM_##b) Serial.print(#b " ")
           BITP(SELFNORM);
@@ -452,7 +493,14 @@ void TSP::interpretParam(uint8_t *buffer) {
           BITP(DIAG);
           BITP(GESTIC);
           Serial.print("]\n");
+          
+          lastNVDM = payload16; // Keep track of NVDM value to make sure that it is set correctly
           break;
+
+     default:
+          Serial.print("\n");
+          break;
+          
      }
 }
 
@@ -625,13 +673,17 @@ void TSP::processByte (uint8_t b) {
                     if (cal[r][t]<v) {
                          // cal[r][t] = v; // Update calibration?
                          // mut[r][t]=v-cal[r][t];
-                         mut[r][t]=0;
+                         mut[r][t]=255;
                     } else {
-                         uint16_t d = cal[r][t]-v;
-                         if (d>255)
+                         if (cal[r][t]<v)
                               mut[r][t] = 255;
                          else
-                              mut[r][t] = d;
+                              mut[r][t] = cal[r][t]-v;
+                         // uint16_t d = cal[r][t]-v;
+                         // if (d>255)
+                         //      mut[r][t] = 255;
+                         // else
+                         //      mut[r][t] = d;
                     }
                     if (calibrating) 
                          cal[r][t] = v;

@@ -4,6 +4,7 @@
 
 int ready = 0; 
 hw_timer_t *My_timer = NULL;
+
 void IRAM_ATTR onTimer(){
      ready++;
 }
@@ -12,9 +13,10 @@ void IRAM_ATTR onTimer(){
 TSP tsp;
 
 
-void handleFrame(uint8_t *frame, unsigned len) {
+void IRAM_ATTR handleFrame(uint8_t *frame, unsigned len) {
      const uint8_t minval = 2;
-     
+
+#ifdef FR0
      bool allZero = true;
      for (unsigned i=0; i<len; ++i)
           if (frame[i] > minval) {
@@ -26,6 +28,7 @@ void handleFrame(uint8_t *frame, unsigned len) {
           Serial.print("\nFR0");
           return;
      }
+#endif // FR0
      
      
      Serial.print("\nFRAME\n");
@@ -58,7 +61,7 @@ void setup() {
 
 
 
-void loop() {
+void IRAM_ATTR loop() {
      delayMicroseconds(1);                      
      tsp.readInfo();
 

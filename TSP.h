@@ -8,8 +8,15 @@
 // Class definition
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// #define VU_VERSION 1
+#define FR0
+
 #define IRQ_PIN A12
-#define TSP_RESET_PIN 14
+#ifdef VU_VERSION
+#  define TSP_RESET_PIN 23
+#else
+#  define TSP_RESET_PIN 14
+#endif
 #define NUM_RX 27
 #define NUM_TX 19
 
@@ -19,7 +26,7 @@
 class TSP {
      uint8_t lastAck;
      uint16_t lastNVDM, lastNVAM;
-     bool needReset;
+     int needReset;
 
      static const uint16_t buflen = 1024;
      uint8_t  msgBuffer[512];
@@ -34,7 +41,7 @@ public:
 public:     
 
      TSP()
-          : cnt(0), locationInMsg(0), msgLen(0), currentCmd(0),gobbleTillCmdAck(0), 
+          : needReset(0), cnt(0), locationInMsg(0), msgLen(0), currentCmd(0),gobbleTillCmdAck(0), 
             gobbled(0)
           { };
      
@@ -62,7 +69,14 @@ public:
      void baseline();
      void transmit();
 
-     const char *getVersion() const { return "V. 2.1 TEST"; }
+     const char *getVersion() const { return "V. 2.2"
+#ifdef FR0
+               " [FR0]"
+#endif 
+#ifdef VU_VERSION
+               " VU Version (D22 reset)"
+#endif
+               ; }
      const char *getResolution() const { return "RX=" STR(NUM_RX) " TX=" STR(NUM_TX); }
      void registerFrameHandler(void (*handler)(uint8_t *frame, unsigned len)) {
           framehandler = handler;

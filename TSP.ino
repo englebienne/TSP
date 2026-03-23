@@ -127,7 +127,7 @@ bool TSP::getData() {
           if (byte res = Wire.endTransmission(false)) {
                Serial.printf("%s: Wire.endTransmission(false) returned %d\n", __PRETTY_FUNCTION__, res);
                // delayMicroseconds(100);
-               needReset=true;
+               needReset++;
                return false;
           }
           Wire.requestFrom(I2C_ADDR,(uint8_t)1);
@@ -135,7 +135,7 @@ bool TSP::getData() {
           if (byte res = Wire.endTransmission()) {
                Serial.printf("%s: Wire.endTransmission() returned %d\n", __PRETTY_FUNCTION__, res);
 //               if (res == 5)
-               needReset=true;
+               needReset++;
                return false;
           }
           
@@ -159,14 +159,14 @@ bool TSP::getData() {
                Serial.printf("%s: Wire.endTransmission(false) - 2 - returned %d\n", __PRETTY_FUNCTION__, res);
                // delayMicroseconds(10);
                // for (byte x=0; x!=10; ++x);
-               needReset=true;
+//               needReset=true;
                return false;
           }
           n = Wire.requestFrom(I2C_ADDR,(uint8_t)n);
           if (byte res = Wire.endTransmission()) {
-               Serial.printf("%s: Wire.endTransmission() - 2 - returned %d after getting %d bytes\n", __PRETTY_FUNCTION__, res, n);
+               Serial.printf("%s: Wire.endTransmission() - 3 - returned %d after getting %d bytes\n", __PRETTY_FUNCTION__, res, n);
                // for (byte x=0; x!=10; ++x);
-               needReset=true;
+//               needReset=true;
                return false;
           }
           // Serial.printf("got %d\n",n);
@@ -192,7 +192,7 @@ bool TSP::getData() {
 void TSP::delayAndPoll(uint16_t msec) {
      for (uint16_t i=0; i!=msec; ++i) {
           bool dataAvailable = interpretReply();
-          if (needReset)
+          if (needReset>5)
                return;
           if (!dataAvailable)
                for (int i=0; i!=10; ++i);
@@ -217,9 +217,10 @@ void TSP::init() {
      // // Wire.setClock(480000);     // Can be overclocked a little?
      // Wire.setTimeout(100);
 
-     needReset = true;
-     while (needReset) {
-          needReset = false;
+     needReset = 6;
+     while (needReset>5) {
+          Serial.printf("%s: Reset loop...\n",__PRETTY_FUNCTION__);          
+          needReset = 0;
           reset();
           Serial.printf("%s: Reset done.\n",__PRETTY_FUNCTION__);          
      }
@@ -320,7 +321,7 @@ byte TSP::getRegisters(byte reg, byte size, byte *buffer) {
      Wire.write(reg);
      if (uint8_t res = Wire.endTransmission(false)) {
           Serial.printf("[TSP getRegisters] endTransmission failed: %d\n", res);
-          needReset=true;
+          needReset++;
           return 0;
           // reset();
      }
@@ -333,7 +334,7 @@ byte TSP::getRegisters(byte reg, byte size, byte *buffer) {
      // Is this necessary?
      if (uint8_t res = Wire.endTransmission(true)) {
           Serial.printf("[TSP getRegisters] endTransmission failed: %d\n", res);
-          needReset=true;
+          needReset++;
           return 0;
           // reset();
      }
@@ -393,9 +394,9 @@ void TSP::readInfo() {
      // Serial.println(__PRETTY_FUNCTION__);
      // uint8_t touchStatus = printTouches();
      // if (touchStatus & 0x10) // Stream ready
-     needReset = false;
+     needReset = 0;
      interpretReply();
-     if (needReset) {
+     if (needReset>5) {
           // for(int i=0; i!=20; ++i);          
           reset();
      }
@@ -701,7 +702,7 @@ void TSP::processByte (uint8_t b) {
                     } else {
                          uint16_t d = cal[r][t]-v;
                          if (d>255)
-                              mut[r][t] = 255;
+                              mut[r][t] = 254;
                          else
                               mut[r][t] = d;
                     }

@@ -441,7 +441,7 @@ module slantedProduction (rows=3,cols=2) {
 }
 
 //slantedProduction(1,1);
-production(1,1);
+/* production(2,2); */
 
 module devel() {
      delta = 80;
@@ -451,7 +451,7 @@ module devel() {
      translate([3*delta,0,0]) sliced();
 }
 
-/* devel(); */
+devel();
 
 /* esp32(); */
 /* translate([28,15,10]) rotate([0,0,270]) (); */

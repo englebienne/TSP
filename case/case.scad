@@ -306,23 +306,13 @@ module exploded() {
      };
 };
 
-//production();
+// production();
 //sliced() closed();
 exploded();
+
+
 /* w = 100; */
 /* h = 70; */
 /* t = 2; */
 
 
-/* module txt(y, string, size) { */
-/*     translate([0,y,-.5]) linear_extrude(1) text(string,size=size,halign="center"); */
-/* } */
-    
-/* translate([0,-30,1]) difference() { */
-/*     cube([w,h,t],center=true); */
-/*     translate([0,0,.5*t]) cube([w-2,h-2,t],center=true); */
-/*     txt(.25*h,"Bon", 14); */
-/* txt(.1*h,"Pour une bobine de filament 3D",5); */
-/* txt(-.15*h,"Joyeux Noël",12); */
-/* txt(-.35*h,"Gros Bisous, Franklin!",size=5); */
-/* } */
